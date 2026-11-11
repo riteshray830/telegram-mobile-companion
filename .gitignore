@@ -2,6 +2,8 @@
 .env
 *.env
 .env.local
+config.json
+.last_forwarded_step
 
 # Virtual environments
 .venv/

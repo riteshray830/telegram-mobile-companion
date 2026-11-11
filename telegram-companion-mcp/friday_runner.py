@@ -11,41 +11,51 @@ from typing import Dict, Any, Optional
 import httpx
 from dotenv import load_dotenv
 
+# Import multi-backend engine
+from ai_backends import get_backend_instance, find_active_conversation_id
+
 # Ensure stdout uses UTF-8 on Windows
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-# Load environment
 script_dir = Path(__file__).resolve().parent
 env_file = script_dir / ".env"
+
+# Auto-check if setup is needed
+if not env_file.exists():
+    print("=" * 65)
+    print(" ⚠️  No configuration found! Launching setup wizard...")
+    print("=" * 65)
+    import setup_wizard
+    setup_wizard.main()
+
 load_dotenv(env_file)
 load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-DEV_ROOT = Path(os.getenv("PROJECTS_ROOT", r"d:\dev")).resolve()
-AGY_EXE = Path.home() / ".gemini" / "bin" / "agy.exe"
+DEV_ROOT = Path(os.getenv("PROJECTS_ROOT", Path.home() / "dev")).resolve()
+AI_BACKEND = os.getenv("AI_BACKEND", "antigravity").strip().lower()
 
 if not TOKEN or not ALLOWED_CHAT_ID:
-    print(f"Error: Missing credentials in {env_file}")
+    print(f"Error: Incomplete credentials in {env_file}. Please run setup_wizard.py.")
     sys.exit(1)
 
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
+backend = get_backend_instance(AI_BACKEND)
+
+# State: start at DEV_ROOT or projects/exploring if exists
+if (DEV_ROOT / "projects" / "exploring").exists():
+    current_dir = DEV_ROOT / "projects" / "exploring"
+else:
+    current_dir = DEV_ROOT
 
 def is_authorized(user_id: int) -> bool:
     return str(user_id) == str(ALLOWED_CHAT_ID)
 
-def find_active_conversation_id() -> Optional[str]:
-    """Finds the most recently active Antigravity conversation ID."""
-    conv_dir = Path.home() / ".gemini" / "antigravity" / "conversations"
-    if not conv_dir.exists():
-        return None
-    dbs = sorted([f for f in conv_dir.glob("*.db")], key=lambda f: f.stat().st_mtime, reverse=True)
-    return dbs[0].stem if dbs else None
-
 async def send_msg(client: httpx.AsyncClient, text: str, parse_mode: Optional[str] = "Markdown"):
     if len(text) > 4000:
-        chunks = [text[i:i+3800] for i in range(0, len(full_msg), 3800)]
+        chunks = [text[i:i+3800] for i in range(0, len(text), 3800)]
         for chunk in chunks:
             payload = {"chat_id": ALLOWED_CHAT_ID, "text": chunk}
             if parse_mode:
@@ -77,52 +87,23 @@ async def send_typing(client: httpx.AsyncClient):
     except Exception:
         pass
 
-async def forward_to_antigravity(client: httpx.AsyncClient, user_message: str):
-    """Forwards natural human language directly into the active Antigravity conversation."""
-    conv_id = find_active_conversation_id()
-    if not conv_id:
-        await send_msg(client, "❌ Could not find an active Antigravity conversation session.")
-        return
-
-    if not AGY_EXE.exists():
-        await send_msg(client, f"❌ agy.exe not found at `{AGY_EXE}`.")
-        return
-
+async def handle_user_message(client: httpx.AsyncClient, text: str):
     await send_typing(client)
-    await send_msg(client, "⚡ *Delivered to Antigravity.* Working on it...")
-
-    # Execute agy agentapi send-message
-    try:
-        # Format message so agent knows it came live from user's phone
-        content = f"[User via Mobile Telegram]: {user_message}"
-        proc = await asyncio.create_subprocess_exec(
-            str(AGY_EXE),
-            "agentapi",
-            "send-message",
-            conv_id,
-            content,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            err_msg = stderr.decode("utf-8", errors="replace")
-            print("Failed to dispatch message to agy:", err_msg)
-            await send_msg(client, f"⚠️ Error dispatching to agent: `{err_msg[:200]}`")
-        else:
-            print(f"Dispatched message to conversation {conv_id}: {user_message[:50]}...")
-    except Exception as e:
-        print("Exception forwarding to agentapi:", e)
-        await send_msg(client, f"❌ Error sending to agent: {e}")
+    context = {
+        "dev_root": str(DEV_ROOT),
+        "current_dir": str(current_dir),
+        "platform": sys.platform
+    }
+    reply = await backend.generate_reply(text, context)
+    if reply:
+        await send_msg(client, reply)
 
 async def main():
-    print(f"🚀 Friday 2-Way Chat Bridge is running!")
+    print(f"🚀 Friday Remote Assistant is running!")
+    print(f"Host: {sys.platform}")
     print(f"Authorized Chat ID: {ALLOWED_CHAT_ID}")
-    print(f"agy.exe path: {AGY_EXE}")
-    print(f"Dev Root: {DEV_ROOT}")
-
-    conv_id = find_active_conversation_id()
-    print(f"Active Conversation ID: {conv_id}")
+    print(f"AI Backend: {AI_BACKEND}")
+    print(f"Workspace Root: {DEV_ROOT}")
 
     offset = None
     first_run = True
@@ -133,9 +114,11 @@ async def main():
                 if first_run:
                     await send_msg(
                         client,
-                        f"💬 *Friday 2-Way Antigravity Chat is Live!*\n\n"
-                        f"Whatever you type here is delivered directly to Antigravity as a human command, and its full response will appear right here.\n\n"
-                        f"Try typing anything: e.g. _\"What projects are in my dev folder?\"_ or _\"Can you check git status in exploring?\"_"
+                        f"⚡ *Friday Assistant Online!*\n\n"
+                        f"• *Backend:* `{AI_BACKEND}`\n"
+                        f"• *Workspace:* `{DEV_ROOT}`\n"
+                        f"• *Platform:* `{sys.platform}`\n\n"
+                        f"Ready for your messages!"
                     )
                     first_run = False
 
@@ -168,12 +151,13 @@ async def main():
                                 if text in ["/start", "/help"]:
                                     await send_msg(
                                         client,
-                                        "💬 *Antigravity Direct Chat*\n\n"
-                                        "Simply send any message in plain English! I will forward it straight to your active Antigravity session on your PC, and return the agent's exact response here."
+                                        f"🤖 *Friday Mobile Assistant*\n\n"
+                                        f"• Backend: `{AI_BACKEND}`\n"
+                                        f"• Workspace: `{DEV_ROOT}`\n\n"
+                                        f"Simply type any question or task in human language, and I will process it directly!"
                                     )
                                 else:
-                                    # Forward message directly to Antigravity!
-                                    await forward_to_antigravity(client, text)
+                                    await handle_user_message(client, text)
 
                     except httpx.RequestError as e:
                         print("Connection recycled:", e)
