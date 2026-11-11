@@ -141,3 +141,4 @@ In `~/.gemini/config/mcp_config.json`:
 1. **User ID Whitelisting**: Every incoming message, tap, or callback verifies `sender_id == TELEGRAM_CHAT_ID`. Unrecognized users are discarded immediately.
 2. **Fail-Safe Approvals**: Permission requests time out (default 120s) and automatically default to **Deny**.
 3. **Credential Isolation**: `.env` is listed in `.gitignore` and must never be committed to source control.
+
