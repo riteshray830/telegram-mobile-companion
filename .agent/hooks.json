@@ -1,0 +1,11 @@
+{
+  "telegram-forwarder": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python d:/dev/projects/exploring/telegram-companion-mcp/forward_reply_hook.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

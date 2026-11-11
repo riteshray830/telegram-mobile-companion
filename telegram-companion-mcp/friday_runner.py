@@ -7,7 +7,7 @@ import shutil
 import asyncio
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import httpx
 from dotenv import load_dotenv
@@ -24,7 +24,7 @@ load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 ALLOWED_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-PROJECTS_ROOT = Path(os.getenv("PROJECTS_ROOT", r"d:\dev\projects")).resolve()
+DEV_ROOT = Path(os.getenv("PROJECTS_ROOT", r"d:\dev")).resolve()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 if not TOKEN or not ALLOWED_CHAT_ID:
@@ -33,16 +33,42 @@ if not TOKEN or not ALLOWED_CHAT_ID:
 
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-# State
-current_project = PROJECTS_ROOT / "exploring"
-if not current_project.exists():
-    current_project = PROJECTS_ROOT
+# State: start at D:\dev or D:\dev\projects\exploring
+if (DEV_ROOT / "projects" / "exploring").exists():
+    current_dir = DEV_ROOT / "projects" / "exploring"
+else:
+    current_dir = DEV_ROOT
 
 def is_authorized(user_id: int) -> bool:
     return str(user_id) == str(ALLOWED_CHAT_ID)
 
+def resolve_safe(path_str: str) -> Optional[Path]:
+    """Resolves a path safely ensuring it remains within DEV_ROOT."""
+    p_str = path_str.strip().strip('"').strip("'")
+    if not p_str or p_str in ["~", "/"]:
+        return DEV_ROOT
+    if p_str == "..":
+        parent = current_dir.parent
+        return parent if parent >= DEV_ROOT else DEV_ROOT
+
+    # Check if absolute path or relative
+    target = Path(p_str)
+    if not target.is_absolute():
+        target = (current_dir / target).resolve()
+    else:
+        target = target.resolve()
+
+    try:
+        if target == DEV_ROOT or target.is_relative_to(DEV_ROOT):
+            return target
+    except AttributeError:
+        # Fallback for Python < 3.9 (though we are on 3.13)
+        if str(target).lower().startswith(str(DEV_ROOT).lower()):
+            return target
+    return None
+
 async def send_msg(client: httpx.AsyncClient, text: str, parse_mode: Optional[str] = "Markdown", reply_markup: Optional[dict] = None):
-    # Telegram message text limit is 4096 characters
+    # Telegram message limit is 4096 chars
     if len(text) > 4000:
         chunks = [text[i:i+3800] for i in range(0, len(text), 3800)]
         for idx, chunk in enumerate(chunks):
@@ -70,7 +96,6 @@ async def send_msg(client: httpx.AsyncClient, text: str, parse_mode: Optional[st
         r = await client.post(f"{API_URL}/sendMessage", json=payload)
         res = r.json()
         if not res.get("ok") and parse_mode:
-            # Fallback to plain text if markdown entity parse failed
             payload.pop("parse_mode")
             await client.post(f"{API_URL}/sendMessage", json=payload)
     except Exception as e:
@@ -78,7 +103,7 @@ async def send_msg(client: httpx.AsyncClient, text: str, parse_mode: Optional[st
 
 async def send_file_doc(client: httpx.AsyncClient, file_path: Path, caption: str = ""):
     if not file_path.exists():
-        await send_msg(client, f"File not found: {file_path}")
+        await send_msg(client, f"File not found: `{file_path}`")
         return
     try:
         with open(file_path, "rb") as f:
@@ -89,7 +114,7 @@ async def send_file_doc(client: httpx.AsyncClient, file_path: Path, caption: str
         await send_msg(client, f"Failed to send file: {e}")
 
 # ==========================================
-# Project Management Handlers
+# Workspace & Project Management Handlers
 # ==========================================
 
 def get_project_type(p: Path) -> str:
@@ -101,104 +126,70 @@ def get_project_type(p: Path) -> str:
         return "Python"
     if (p / "index.html").exists():
         return "HTML / Frontend"
+    if (p / "AndroidManifest.xml").exists() or (p / "build.gradle").exists():
+        return "Android / Gradle"
     if (p / ".git").exists():
         return "Git Repo"
-    return "Directory"
+    return "Folder"
+
+async def handle_pwd(client: httpx.AsyncClient):
+    rel = current_dir.relative_to(DEV_ROOT) if current_dir != DEV_ROOT else "."
+    ptype = get_project_type(current_dir)
+    await send_msg(client, f"📍 *Current Location:*\n`{current_dir}`\nRelative: `D:\\dev\\{rel}`\nType: _{ptype}_")
+
+async def handle_cd(client: httpx.AsyncClient, target_str: str):
+    global current_dir
+    target = resolve_safe(target_str)
+    if not target or not target.exists() or not target.is_dir():
+        await send_msg(client, f"❌ Directory not found or outside `D:\\dev`: `{target_str}`")
+        return
+
+    current_dir = target
+    rel = current_dir.relative_to(DEV_ROOT) if current_dir != DEV_ROOT else "."
+    ptype = get_project_type(current_dir)
+    await send_msg(client, f"📂 Switched to: *{current_dir.name}*\n`D:\\dev\\{rel}` ({ptype})")
 
 async def handle_list_projects(client: httpx.AsyncClient):
-    global current_project
-    if not PROJECTS_ROOT.exists():
-        await send_msg(client, f"Projects directory does not exist: `{PROJECTS_ROOT}`")
+    r"""Discovers projects across D:\dev and D:\dev\projects."""
+    if not DEV_ROOT.exists():
+        await send_msg(client, f"Dev directory not found: `{DEV_ROOT}`")
         return
 
-    items = [p for p in PROJECTS_ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")]
-    if not items:
-        await send_msg(client, f"No projects found in `{PROJECTS_ROOT}`.\n\nUse `/create <type> <name>` to start one!")
-        return
+    # Check top-level items in D:\dev
+    top_items = [p for p in DEV_ROOT.iterdir() if p.is_dir() and not p.name.startswith(".")]
+    
+    # Also include items in D:\dev\projects if it exists
+    proj_items = []
+    projects_dir = DEV_ROOT / "projects"
+    if projects_dir.exists() and projects_dir.is_dir():
+        proj_items = [p for p in projects_dir.iterdir() if p.is_dir() and not p.name.startswith(".")]
 
-    lines = [f"📂 *Projects in* `{PROJECTS_ROOT}`:\n"]
+    all_targets = sorted(list(set(top_items + proj_items)), key=lambda x: str(x))
+    
+    lines = [f"📂 *Workspaces in* `{DEV_ROOT}`:\n"]
     buttons = []
-    for p in items:
+    
+    for p in all_targets:
         ptype = get_project_type(p)
-        active_mark = " 👉 *(active)*" if p == current_project else ""
-        lines.append(f"• *{p.name}* — _{ptype}_{active_mark}")
-        buttons.append([{"text": f"Select: {p.name}", "callback_data": f"select:{p.name}"}])
+        rel_str = str(p.relative_to(DEV_ROOT))
+        active_mark = " 👉 *(active)*" if p == current_dir else ""
+        lines.append(f"• *{rel_str}* — _{ptype}_{active_mark}")
+        # Add tap buttons (limit button payload length)
+        btn_data = f"cd:{rel_str}"
+        if len(btn_data.encode("utf-8")) <= 64:
+            buttons.append([{"text": f"📂 {p.name}", "callback_data": btn_data}])
 
-    lines.append(f"\n_Active Project:_ `{current_project.name}`")
-    keyboard = {"inline_keyboard": buttons}
+    lines.append(f"\n_Current Folder:_ `{current_dir.relative_to(DEV_ROOT) if current_dir != DEV_ROOT else '.'}`")
+    lines.append(f"\n_Tip: Use `/cd <folder>` or `/cd ..` to navigate freely._")
+    
+    # Show at most 10 buttons to prevent clutter
+    keyboard = {"inline_keyboard": buttons[:10]} if buttons else None
     await send_msg(client, "\n".join(lines), reply_markup=keyboard)
 
-async def handle_select_project(client: httpx.AsyncClient, name: str):
-    global current_project
-    target = PROJECTS_ROOT / name.strip()
-    if not target.exists() or not target.is_dir():
-        await send_msg(client, f"❌ Project not found: `{name}`")
-        return
-
-    current_project = target
-    ptype = get_project_type(target)
-    await send_msg(client, f"✅ Active project switched to: *{target.name}* (`{ptype}`)\nPath: `{target}`")
-
-async def handle_create_project(client: httpx.AsyncClient, args_str: str):
-    global current_project
-    parts = args_str.strip().split(maxsplit=1)
-    if len(parts) == 1:
-        ptype = "python"
-        pname = parts[0]
-    elif len(parts) == 2:
-        ptype = parts[0].lower()
-        pname = parts[1]
-    else:
-        await send_msg(client, "Usage: `/create <type> <name>`\nTypes: `python`, `node`, `web`, `empty`\nExample: `/create python my-bot`")
-        return
-
-    target = PROJECTS_ROOT / pname
-    if target.exists():
-        await send_msg(client, f"❌ Project `{pname}` already exists in `{PROJECTS_ROOT}`!")
-        return
-
-    try:
-        target.mkdir(parents=True, exist_ok=True)
-        # Template scaffolding
-        if ptype in ["python", "py"]:
-            (target / "main.py").write_text("#!/usr/bin/env python3\n\ndef main():\n    print('Hello from " + pname + "!')\n\nif __name__ == '__main__':\n    main()\n", encoding="utf-8")
-            (target / "README.md").write_text(f"# {pname}\n\nPython project created via Telegram.\n", encoding="utf-8")
-            (target / ".gitignore").write_text("__pycache__/\n*.pyc\n.venv/\n.env\n", encoding="utf-8")
-        elif ptype in ["node", "js", "ts"]:
-            pkg = {
-                "name": pname,
-                "version": "1.0.0",
-                "description": "Created via Telegram",
-                "main": "index.js",
-                "scripts": {"start": "node index.js"},
-                "license": "MIT"
-            }
-            (target / "package.json").write_text(json.dumps(pkg, indent=2), encoding="utf-8")
-            (target / "index.js").write_text("console.log('Hello from " + pname + "!');\n", encoding="utf-8")
-            (target / "README.md").write_text(f"# {pname}\n\nNode.js project created via Telegram.\n", encoding="utf-8")
-            (target / ".gitignore").write_text("node_modules/\n.env\n", encoding="utf-8")
-        elif ptype in ["web", "html"]:
-            (target / "index.html").write_text(f"<!DOCTYPE html>\n<html>\n<head><title>{pname}</title></head>\n<body>\n  <h1>Welcome to {pname}</h1>\n</body>\n</html>\n", encoding="utf-8")
-            (target / "style.css").write_text("body { font-family: sans-serif; margin: 2rem; }\n", encoding="utf-8")
-            (target / "README.md").write_text(f"# {pname}\n\nWeb project created via Telegram.\n", encoding="utf-8")
-        else:
-            (target / "README.md").write_text(f"# {pname}\n\nProject created via Telegram.\n", encoding="utf-8")
-
-        # Initialize Git repo
-        try:
-            subprocess.run(["git", "init"], cwd=target, capture_output=True, timeout=5)
-        except Exception:
-            pass
-
-        current_project = target
-        await send_msg(client, f"🎉 *Project Created Successfully!*\n\n• Name: *{pname}*\n• Type: `{ptype}`\n• Path: `{target}`\n\nSet as active project.")
-    except Exception as e:
-        await send_msg(client, f"❌ Failed to create project: {e}")
-
 async def handle_list_files(client: httpx.AsyncClient, subpath: str = ""):
-    target_dir = current_project / subpath.strip() if subpath else current_project
-    if not target_dir.exists() or not target_dir.is_dir():
-        await send_msg(client, f"Directory not found: `{target_dir}`")
+    target_dir = resolve_safe(subpath) if subpath else current_dir
+    if not target_dir or not target_dir.exists() or not target_dir.is_dir():
+        await send_msg(client, f"Directory not found: `{subpath}`")
         return
 
     items = list(target_dir.iterdir())
@@ -206,35 +197,50 @@ async def handle_list_files(client: httpx.AsyncClient, subpath: str = ""):
         await send_msg(client, f"📁 `{target_dir.name}` is empty.")
         return
 
-    dirs = sorted([f"📁 {p.name}/" for p in items if p.is_dir() and not p.name.startswith(".")])
-    files = sorted([f"📄 {p.name} ({p.stat().st_size} B)" for p in items if p.is_file() and not p.name.startswith(".")])
+    dirs = sorted([p for p in items if p.is_dir() and not p.name.startswith(".")])
+    files = sorted([p for p in items if p.is_file() and not p.name.startswith(".")])
+
+    dir_lines = [f"📁 {p.name}/" for p in dirs]
+    file_lines = [f"📄 {p.name} ({p.stat().st_size} B)" for p in files]
     
-    listing = "\n".join(dirs + files)
-    rel_path = target_dir.relative_to(PROJECTS_ROOT)
-    await send_msg(client, f"📂 *Listing:* `{rel_path}`\n\n```text\n{listing}\n```")
+    listing = "\n".join(dir_lines + file_lines)
+    rel_path = target_dir.relative_to(DEV_ROOT) if target_dir != DEV_ROOT else "."
+
+    # Create quick navigation buttons for subdirectories
+    buttons = []
+    if target_dir != DEV_ROOT:
+        buttons.append([{"text": "⬆️ Parent (..)", "callback_data": "cd:.."}])
+    
+    for d in dirs[:8]:
+        rel_d = str(d.relative_to(DEV_ROOT))
+        cb = f"cd:{rel_d}"
+        if len(cb.encode("utf-8")) <= 64:
+            buttons.append([{"text": f"📁 {d.name}/", "callback_data": cb}])
+
+    keyboard = {"inline_keyboard": buttons} if buttons else None
+    await send_msg(client, f"📂 *Listing:* `D:\\dev\\{rel_path}`\n\n```text\n{listing}\n```", reply_markup=keyboard)
 
 async def handle_find_files(client: httpx.AsyncClient, query: str):
     if not query.strip():
-        await send_msg(client, "Usage: `/find <filename or pattern>`\nExample: `/find *.py` or `/find server`")
+        await send_msg(client, "Usage: `/find <pattern>`\nExample: `/find *.py` or `/find server`")
         return
 
     q = query.strip()
     pattern = f"*{q}*" if not any(c in q for c in "*?[]") else q
-    matches = list(current_project.rglob(pattern))
+    matches = list(current_dir.rglob(pattern))
     
-    # Filter out venv, git, node_modules
     clean_matches = [
         m for m in matches 
-        if not any(part.startswith(".") or part in ["node_modules", ".venv", "__pycache__"] for part in m.parts)
-    ][:20]
+        if not any(part.startswith(".") or part in ["node_modules", ".venv", "__pycache__", "build", ".dart_tool"] for part in m.parts)
+    ][:25]
 
     if not clean_matches:
-        await send_msg(client, f"🔍 No files found matching `{q}` in *{current_project.name}*.")
+        await send_msg(client, f"🔍 No files matching `{q}` in *{current_dir.name}*.")
         return
 
-    lines = [f"🔍 *Found {len(clean_matches)} matches in* `{current_project.name}`:\n"]
+    lines = [f"🔍 *Found {len(clean_matches)} matches in* `{current_dir.name}`:\n"]
     for m in clean_matches:
-        rel = m.relative_to(current_project)
+        rel = m.relative_to(current_dir)
         icon = "📁" if m.is_dir() else "📄"
         lines.append(f"{icon} `{rel}`")
 
@@ -242,18 +248,16 @@ async def handle_find_files(client: httpx.AsyncClient, query: str):
 
 async def handle_read_file(client: httpx.AsyncClient, file_str: str):
     if not file_str.strip():
-        await send_msg(client, "Usage: `/read <relative_file_path>`\nExample: `/read main.py`")
+        await send_msg(client, "Usage: `/read <file_path>`\nExample: `/read main.py` or `/read src/index.js`")
         return
 
-    target = (current_project / file_str.strip()).resolve()
-    if not target.exists() or not target.is_file():
+    target = resolve_safe(file_str)
+    if not target or not target.exists() or not target.is_file():
         await send_msg(client, f"❌ File not found: `{file_str}`")
         return
 
-    # Check size
     size = target.stat().st_size
     if size > 30000:
-        # Too big for text message, send as document
         await send_msg(client, f"📄 File is large ({size} bytes). Sending as document...")
         await send_file_doc(client, target, caption=f"{target.name}")
         return
@@ -273,14 +277,69 @@ async def handle_write_file(client: httpx.AsyncClient, text_payload: str):
 
     first_line = lines[0].replace("/write", "").strip()
     content = lines[1]
-    target = (current_project / first_line).resolve()
+    target = resolve_safe(first_line)
+    if not target:
+        await send_msg(client, "❌ Invalid path outside `D:\\dev`.")
+        return
 
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        await send_msg(client, f"✅ Successfully written to `{target.relative_to(PROJECTS_ROOT)}` ({len(content)} chars).")
+        rel = target.relative_to(DEV_ROOT)
+        await send_msg(client, f"✅ Written to `{rel}` ({len(content)} characters).")
     except Exception as e:
         await send_msg(client, f"❌ Failed to write file: {e}")
+
+async def handle_create_project(client: httpx.AsyncClient, args_str: str):
+    global current_dir
+    parts = args_str.strip().split(maxsplit=1)
+    if len(parts) == 1:
+        ptype = "python"
+        pname = parts[0]
+    elif len(parts) == 2:
+        ptype = parts[0].lower()
+        pname = parts[1]
+    else:
+        await send_msg(client, "Usage: `/create <type> <name>`\nTypes: `python`, `node`, `web`, `empty`\nExample: `/create python test-app`")
+        return
+
+    target = current_dir / pname
+    if target.exists():
+        await send_msg(client, f"❌ `{pname}` already exists in `{current_dir}`!")
+        return
+
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        if ptype in ["python", "py"]:
+            (target / "main.py").write_text("#!/usr/bin/env python3\n\ndef main():\n    print('Hello from " + pname + "!')\n\nif __name__ == '__main__':\n    main()\n", encoding="utf-8")
+            (target / "README.md").write_text(f"# {pname}\n\nPython project created via Telegram.\n", encoding="utf-8")
+            (target / ".gitignore").write_text("__pycache__/\n*.pyc\n.venv/\n.env\n", encoding="utf-8")
+        elif ptype in ["node", "js", "ts"]:
+            pkg = {
+                "name": pname,
+                "version": "1.0.0",
+                "main": "index.js",
+                "scripts": {"start": "node index.js"}
+            }
+            (target / "package.json").write_text(json.dumps(pkg, indent=2), encoding="utf-8")
+            (target / "index.js").write_text("console.log('Hello from " + pname + "!');\n", encoding="utf-8")
+            (target / "README.md").write_text(f"# {pname}\n\nNode.js project created via Telegram.\n", encoding="utf-8")
+        elif ptype in ["web", "html"]:
+            (target / "index.html").write_text(f"<!DOCTYPE html>\n<html>\n<head><title>{pname}</title></head>\n<body>\n  <h1>Welcome to {pname}</h1>\n</body>\n</html>\n", encoding="utf-8")
+            (target / "style.css").write_text("body { font-family: sans-serif; margin: 2rem; }\n", encoding="utf-8")
+            (target / "README.md").write_text(f"# {pname}\n\nWeb project created via Telegram.\n", encoding="utf-8")
+        else:
+            (target / "README.md").write_text(f"# {pname}\n\nCreated via Telegram.\n", encoding="utf-8")
+
+        try:
+            subprocess.run(["git", "init"], cwd=target, capture_output=True, timeout=5)
+        except Exception:
+            pass
+
+        current_dir = target
+        await send_msg(client, f"🎉 *Created Successfully!*\n• Name: *{pname}*\n• Type: `{ptype}`\n• Path: `{target}`\n\nActive directory updated.")
+    except Exception as e:
+        await send_msg(client, f"❌ Failed to create: {e}")
 
 async def handle_run_command(client: httpx.AsyncClient, cmd_str: str):
     cmd = cmd_str.strip()
@@ -288,12 +347,12 @@ async def handle_run_command(client: httpx.AsyncClient, cmd_str: str):
         await send_msg(client, "Usage: `/run <command>`\nExample: `/run git status` or `/run python main.py`")
         return
 
-    await send_msg(client, f"⚙️ Running in `{current_project.name}`:\n`{cmd}`...")
+    await send_msg(client, f"⚙️ Running in `{current_dir.name}`:\n`{cmd}`...")
     
     try:
         proc = await asyncio.create_subprocess_shell(
             cmd,
-            cwd=str(current_project),
+            cwd=str(current_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -309,7 +368,7 @@ async def handle_run_command(client: httpx.AsyncClient, cmd_str: str):
             if err_str:
                 result_parts.append(f"⚠️ *Stderr:*\n```text\n{err_str}\n```")
             if not result_parts:
-                result_parts.append("_Command finished with no output._")
+                result_parts.append("_Finished with no output._")
 
             status_icon = "✅" if code == 0 else f"❌ (Exit {code})"
             header = f"{status_icon} *Result for:* `{cmd}`\n\n"
@@ -325,14 +384,19 @@ async def handle_git(client: httpx.AsyncClient, git_args: str):
     await handle_run_command(client, f"git {sub}")
 
 async def handle_ai_chat(client: httpx.AsyncClient, user_text: str):
-    """Fallback natural-language chat assistant."""
-    # Check if user query matches common natural requests
-    lower = user_text.lower()
-    if any(k in lower for k in ["list project", "my project", "show project", "what project"]):
+    lower = user_text.lower().strip()
+    if any(k in lower for k in ["list project", "my project", "show project", "projects"]):
         await handle_list_projects(client)
         return
-    if lower.startswith("create project "):
-        await handle_create_project(client, user_text[15:])
+    if lower == "pwd" or lower == "where am i":
+        await handle_pwd(client)
+        return
+    if lower.startswith("cd "):
+        await handle_cd(client, user_text[3:].strip())
+        return
+    if lower.startswith("create project ") or lower.startswith("create "):
+        arg = user_text[15:] if lower.startswith("create project ") else user_text[7:]
+        await handle_create_project(client, arg)
         return
     if lower.startswith("run "):
         await handle_run_command(client, user_text[4:])
@@ -340,25 +404,23 @@ async def handle_ai_chat(client: httpx.AsyncClient, user_text: str):
     if lower in ["git status", "git diff", "git log"]:
         await handle_git(client, lower[4:])
         return
-    if any(k in lower for k in ["files", "list files", "ls"]):
+    if lower in ["ls", "dir", "list files", "files"]:
         await handle_list_files(client)
         return
 
-    # If GEMINI_API_KEY is available, invoke Gemini AI chat
+    # If GEMINI_API_KEY is configured
     if GEMINI_API_KEY:
         try:
             prompt = (
                 f"You are Friday, an AI developer assistant connected to the user's PC via Telegram.\n"
-                f"Active project: {current_project.name} at {current_project}\n"
-                f"Projects root: {PROJECTS_ROOT}\n"
+                f"Dev Root: {DEV_ROOT}\n"
+                f"Current directory: {current_dir}\n"
                 f"User asked: {user_text}\n"
-                f"Give a concise, helpful response formatted in Telegram markdown."
+                f"Give a concise, helpful response formatted for Telegram markdown."
             )
             g_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
             async with httpx.AsyncClient(timeout=30.0) as g_client:
-                res = await g_client.post(g_url, json={
-                    "contents": [{"parts": [{"text": prompt}]}]
-                })
+                res = await g_client.post(g_url, json={"contents": [{"parts": [{"text": prompt}]}]})
                 g_data = res.json()
                 reply = g_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                 if reply:
@@ -367,44 +429,42 @@ async def handle_ai_chat(client: httpx.AsyncClient, user_text: str):
         except Exception as e:
             print("Gemini API error:", e)
 
-    # Default friendly command guidance
     help_text = (
-        f"🤖 *Friday Mobile Assistant*\n\n"
-        f"Active Project: `{current_project.name}`\n\n"
-        f"Available Commands:\n"
-        f"• `/projects` - List all projects\n"
-        f"• `/create <type> <name>` - Create a new project (`python`, `node`, `web`)\n"
-        f"• `/cd <name>` - Switch active project\n"
-        f"• `/ls [dir]` - List files in current project\n"
+        f"🤖 *Friday Remote Dev Assistant*\n\n"
+        f"📍 Location: `{current_dir.relative_to(DEV_ROOT) if current_dir != DEV_ROOT else '.'}` (`{current_dir}`)\n\n"
+        f"Navigation & Exploration:\n"
+        f"• `/pwd` - Show current path\n"
+        f"• `/cd <dir>` - Go into folder (or `/cd ..` / `/cd ~`)\n"
+        f"• `/ls [dir]` - List files & folders with tap buttons\n"
+        f"• `/projects` - List all projects across D:\\dev\n\n"
+        f"Project & File Management:\n"
+        f"• `/create <type> <name>` - Create project (`python`, `node`, `web`)\n"
         f"• `/find <pattern>` - Search files\n"
-        f"• `/read <file>` - View file content or code\n"
-        f"• `/write <file>` - Write/edit a file\n"
-        f"• `/run <command>` - Execute shell command on PC\n"
-        f"• `/git [status/diff/commit]` - Git controls\n"
-        f"• `/help` - Show this menu\n"
+        f"• `/read <file>` - Inspect code or file content\n"
+        f"• `/write <file>` - Write/edit a file\n\n"
+        f"Execution:\n"
+        f"• `/run <command>` - Run shell commands on PC\n"
+        f"• `/git [status/diff/commit]` - Git commands\n"
     )
     await send_msg(client, help_text)
 
 # ==========================================
-# Main Telegram Polling Loop
+# Main Loop
 # ==========================================
 
 async def main():
-    print(f"🚀 Friday Mobile Assistant is running!")
+    print(f"🚀 Friday Remote Assistant is running across {DEV_ROOT}!")
     print(f"Authorized Chat ID: {ALLOWED_CHAT_ID}")
-    print(f"Projects Root: {PROJECTS_ROOT}")
-    print(f"Active Project: {current_project}")
+    print(f"Current Directory: {current_dir}")
 
     offset = None
     async with httpx.AsyncClient(timeout=35.0) as client:
-        # Send a startup ping
         await send_msg(
             client,
-            f"⚡ *Friday Mobile Assistant Online!*\n\n"
-            f"• *PC:* Connected\n"
-            f"• *Active Project:* `{current_project.name}`\n"
-            f"• *Root:* `{PROJECTS_ROOT}`\n\n"
-            f"Type `/projects` or `/help` to get started."
+            f"⚡ *Friday Assistant Updated!*\n\n"
+            f"• *Scope:* Entire `D:\\dev` folder unlocked\n"
+            f"• *Current Path:* `{current_dir}`\n\n"
+            f"Use `/cd`, `/ls`, `/pwd`, or `/projects` to navigate anywhere in `D:\\dev`."
         )
 
         while True:
@@ -423,7 +483,6 @@ async def main():
                 for update in data.get("result", []):
                     offset = update["update_id"] + 1
 
-                    # Handle Callback Queries (Buttons)
                     if "callback_query" in update:
                         cb = update["callback_query"]
                         sender_id = cb.get("from", {}).get("id")
@@ -434,12 +493,11 @@ async def main():
                         cb_id = cb.get("id")
                         await client.post(f"{API_URL}/answerCallbackQuery", json={"callback_query_id": cb_id})
 
-                        if cb_data.startswith("select:"):
-                            proj_name = cb_data.split(":", 1)[1]
-                            await handle_select_project(client, proj_name)
+                        if cb_data.startswith("cd:"):
+                            target = cb_data.split(":", 1)[1]
+                            await handle_cd(client, target)
                         continue
 
-                    # Handle Messages
                     if "message" in update:
                         msg = update["message"]
                         sender_id = msg.get("from", {}).get("id")
@@ -450,15 +508,17 @@ async def main():
                         if not text:
                             continue
 
-                        # Routing commands
-                        if text == "/start" or text == "/help":
+                        if text in ["/start", "/help"]:
                             await handle_ai_chat(client, "help")
+                        elif text == "/pwd":
+                            await handle_pwd(client)
+                        elif text == "/cd" or text.startswith("/cd "):
+                            target = text[3:].strip() or "~"
+                            await handle_cd(client, target)
                         elif text in ["/projects", "/list"]:
                             await handle_list_projects(client)
                         elif text.startswith("/create"):
                             await handle_create_project(client, text[7:])
-                        elif text.startswith("/cd ") or text.startswith("/open "):
-                            await handle_select_project(client, text.split(maxsplit=1)[1])
                         elif text == "/ls" or text.startswith("/ls "):
                             sub = text[3:].strip()
                             await handle_list_files(client, sub)
@@ -473,7 +533,6 @@ async def main():
                         elif text.startswith("/git"):
                             await handle_git(client, text[4:])
                         else:
-                            # Natural language chat
                             await handle_ai_chat(client, text)
 
             except httpx.RequestError as e:
@@ -485,4 +544,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
