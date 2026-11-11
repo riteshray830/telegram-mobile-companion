@@ -206,3 +206,4 @@ def get_backend_instance(backend_name: str) -> BaseAIBackend:
     else:
         # Default: Antigravity
         return AntigravityBackend()
+

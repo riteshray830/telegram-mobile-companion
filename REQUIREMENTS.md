@@ -79,3 +79,4 @@ uv run telegram-companion-mcp/friday_runner.py
 * **Strict Git Exclusion**: `.env`, virtual environments, and caches are listed in `.gitignore` and **will never be uploaded to GitHub**.
 * **User ID Locking**: The bot rejects messages from any Telegram user ID other than the configured owner.
 * **No Inbound Open Ports**: Uses Telegram HTTPS long-polling. No ngrok, port forwarding, or exposed local servers required.
+
