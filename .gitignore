@@ -4,6 +4,8 @@
 .env.local
 config.json
 .last_forwarded_step
+.last_logged_step
+.friday.lock
 
 # Virtual environments
 .venv/

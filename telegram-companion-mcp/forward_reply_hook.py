@@ -45,6 +45,13 @@ def main():
         print(json.dumps({}))
         return
 
+    # Automatically log conversation turns to CHAT.md and .chat.md
+    try:
+        import chat_logger
+        chat_logger.sync_from_transcript(transcript_path_str)
+    except Exception as e:
+        log_err(f"Error updating CHAT.md: {e}")
+
     state_file = script_dir / ".last_forwarded_step"
     last_sent_step = -1
     if state_file.exists():

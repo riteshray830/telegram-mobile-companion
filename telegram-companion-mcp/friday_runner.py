@@ -164,11 +164,21 @@ async def handle_user_message(client: httpx.AsyncClient, text: str):
         if photo_path:
             await send_photo_file(client, photo_path, caption=reply or "🖥️ Current Laptop Screen")
             try:
+                import chat_logger
+                chat_logger.append_turn_to_chat(user_msg=text, assistant_msg=reply or "🖥️ Current Laptop Screen [Photo]", source="Telegram")
+            except Exception:
+                pass
+            try:
                 photo_path.unlink(missing_ok=True)
             except Exception:
                 pass
         elif reply:
             await send_msg(client, reply)
+            try:
+                import chat_logger
+                chat_logger.append_turn_to_chat(user_msg=text, assistant_msg=reply, source="Telegram")
+            except Exception:
+                pass
         return
 
     # 2. General AI / Antigravity Execution (for coding, files, projects, or complex tasks)
@@ -181,6 +191,11 @@ async def handle_user_message(client: httpx.AsyncClient, text: str):
     reply = await backend.generate_reply(text, context)
     if reply:
         await send_msg(client, reply)
+        try:
+            import chat_logger
+            chat_logger.append_turn_to_chat(user_msg=text, assistant_msg=reply, source="Telegram")
+        except Exception:
+            pass
 
 async def battery_watchdog(client: httpx.AsyncClient):
     """Proactive battery monitor: warns if battery drops below 15% and discharging."""
