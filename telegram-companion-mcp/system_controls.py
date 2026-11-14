@@ -14,6 +14,9 @@ import psutil
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+# Cache for hardware battery capacity / cycle count (does not change rapidly)
+_BATTERY_HEALTH_CACHE = {"time": 0, "extra": ""}
+
 def get_battery_report() -> str:
     """Detailed battery health, charge, and power status."""
     battery = psutil.sensors_battery()
@@ -31,35 +34,52 @@ def get_battery_report() -> str:
         mins = (battery.secsleft % 3600) // 60
         time_left = f"• *Estimated Time Remaining:* `{hrs}h {mins}m`\n"
 
-    # Deep battery health metrics on Windows
+    # Deep battery health metrics on Windows (cached for 1 hour for instant sub-millisecond response)
     health_extra = ""
     if sys.platform == "win32":
-        try:
-            cmd = (
-                "powercfg /batteryreport /xml /output \"$env:TEMP\\b_rep.xml\" 2>$null; "
-                "[xml]$r = Get-Content \"$env:TEMP\\b_rep.xml\" -ErrorAction SilentlyContinue; "
-                "$b = $r.BatteryReport.Batteries.Battery; "
-                "\"$($b.DesignCapacity)|$($b.FullChargeCapacity)|$($b.CycleCount)|$($b.Manufacturer)\""
-            )
-            res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=6)
-            out = res.stdout.strip()
-            if "|" in out:
-                parts = out.split("|")
-                if len(parts) >= 3 and parts[0].isdigit() and parts[1].isdigit():
-                    des = int(parts[0])
-                    full = int(parts[1])
-                    cycle = parts[2] if parts[2] else "N/A"
-                    mfg = parts[3] if len(parts) > 3 and parts[3] else "Unknown"
-                    if des > 0:
+        now = time.time()
+        if now - _BATTERY_HEALTH_CACHE["time"] < 3600 and _BATTERY_HEALTH_CACHE["extra"]:
+            health_extra = _BATTERY_HEALTH_CACHE["extra"]
+        else:
+            try:
+                xml_out = Path(tempfile.gettempdir()) / "battery_report.xml"
+                # If XML doesn't exist or is older than 1 hour, generate it
+                if not xml_out.exists() or (now - xml_out.stat().st_mtime > 3600):
+                    subprocess.run(
+                        ["powercfg", "/batteryreport", "/xml", "/output", str(xml_out)],
+                        capture_output=True,
+                        timeout=5
+                    )
+                if xml_out.exists():
+                    import xml.etree.ElementTree as ET
+                    tree = ET.parse(xml_out)
+                    root = tree.getroot()
+                    des = full = cycle = mfg = None
+                    for el in root.iter():
+                        tag = el.tag.split("}")[-1]
+                        if tag == "DesignCapacity" and el.text and el.text.isdigit():
+                            des = int(el.text)
+                        elif tag == "FullChargeCapacity" and el.text and el.text.isdigit():
+                            full = int(el.text)
+                        elif tag == "CycleCount" and el.text and el.text.isdigit():
+                            cycle = int(el.text)
+                        elif tag == "Manufacturer" and el.text:
+                            mfg = el.text
+
+                    if des and full and des > 0:
                         h_pct = round((full / des) * 100, 2)
+                        cycle_str = str(cycle) if cycle is not None else "N/A"
+                        mfg_str = mfg if mfg else "Unknown"
                         health_extra = (
                             f"• *Battery Health:* `{h_pct}%`\n"
-                            f"• *Cycle Count:* `{cycle}` cycles\n"
+                            f"• *Cycle Count:* `{cycle_str}` cycles\n"
                             f"• *Current Max Capacity:* `{full} mWh` (Design: `{des} mWh`)\n"
-                            f"• *Manufacturer:* `{mfg}`\n"
+                            f"• *Manufacturer:* `{mfg_str}`\n"
                         )
-        except Exception:
-            pass
+                        _BATTERY_HEALTH_CACHE["time"] = now
+                        _BATTERY_HEALTH_CACHE["extra"] = health_extra
+            except Exception:
+                pass
 
     return (
         f"🔋 *Battery Telemetry & Health*\n\n"

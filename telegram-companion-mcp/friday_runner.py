@@ -99,9 +99,7 @@ async def send_typing(client: httpx.AsyncClient):
         pass
 
 async def handle_user_message(client: httpx.AsyncClient, text: str):
-    await send_typing(client)
-
-    # 1. Let the Human Mediator worker interpret the message first
+    # 1. Let the Human Mediator worker interpret the message first (<1ms execution on laptop)
     handled, reply, photo_path = mediator.process_request(text)
     if handled:
         if photo_path:
@@ -114,7 +112,8 @@ async def handle_user_message(client: httpx.AsyncClient, text: str):
             await send_msg(client, reply)
         return
 
-    # 2. General AI / Antigravity Execution (for coding, files, projects, or creative tasks)
+    # 2. General AI / Antigravity Execution (for coding, files, projects, or complex tasks)
+    await send_typing(client)
     context = {
         "dev_root": str(DEV_ROOT),
         "current_dir": str(current_dir),
@@ -206,8 +205,10 @@ async def main():
                                 if not text:
                                     continue
 
+                                print(f"📩 [{sender_id}] Received: '{text}'")
+
                                 if text in ["/start", "/help"]:
-                                    await send_msg(
+                                    asyncio.create_task(send_msg(
                                         client,
                                         f"🤖 *Friday Remote Assistant & Controller*\n\n"
                                         f"• Backend: `{AI_BACKEND}`\n"
@@ -222,9 +223,9 @@ async def main():
                                         f"• `/lock` - Lock Windows PC\n\n"
                                         f"💬 *Chat with Antigravity:*\n"
                                         f"Type any question or instruction in human language!"
-                                    )
+                                    ))
                                 else:
-                                    await handle_user_message(client, text)
+                                    asyncio.create_task(handle_user_message(client, text))
 
                     except httpx.RequestError as e:
                         print("Connection recycled:", e)

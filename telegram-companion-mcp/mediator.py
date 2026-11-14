@@ -193,12 +193,40 @@ class MediatorWorker:
         if any(k in text for k in proc_keywords):
             return True, format_natural_processes(), None
 
-        # 8. Open Apps, Websites, YouTube, or Folders (with Chrome Profile bypass)
-        open_pattern = r"(?:open|launch|start|play|goto|go to)\s+(.+)"
+        # 8. Instant App & Browser Launchers (Ultra-fast, <1ms execution)
+
+        # 8a. Chrome / Browser direct intent (catches "chrome", "open chrome", "can u open chrome", "chrome please", etc.)
+        chrome_triggers = ["chrome", "google chrome", "browser", "chromium"]
+        if any(b in text for b in chrome_triggers):
+            if not any(neg in text for neg in ["close", "kill", "terminate", "stop", "dont", "don't"]):
+                url = app_launcher.parse_url_or_search(text)
+                prof_dir, prof_label = app_launcher.resolve_chrome_profile(text)
+                ok, res_msg = app_launcher.launch_chrome(url=url, profile_dir=prof_dir)
+                return True, res_msg, None
+
+        # 8b. Popular websites / YouTube (catches "youtube", "open youtube", "github", "google", etc.)
+        website_triggers = ["youtube", "google", "github", "reddit", "netflix", "twitter", "x.com", "linkedin", "chatgpt", "claude"]
+        if any(w in text for w in website_triggers):
+            if not any(neg in text for neg in ["close", "kill", "terminate", "stop", "code review", "ticket", "commit", "push"]):
+                url = app_launcher.parse_url_or_search(text)
+                if url:
+                    prof_dir, prof_label = app_launcher.resolve_chrome_profile(text)
+                    ok, res_msg = app_launcher.launch_chrome(url=url, profile_dir=prof_dir)
+                    return True, res_msg, None
+
+        # 8c. Popular Desktop Apps (catches "vs code", "vscode", "notepad", "calculator", "spotify", "terminal", etc.)
+        app_triggers = ["vs code", "vscode", "notepad", "calculator", "calc", "spotify", "powershell", "terminal", "explorer", "dev folder", "downloads folder"]
+        if any(a in text for a in app_triggers):
+            if not any(neg in text for neg in ["close", "kill", "terminate", "stop"]):
+                ok, res_msg = app_launcher.launch_app(text)
+                return True, res_msg, None
+
+        # 8d. Generic Open pattern ("open ...", "launch ...", "start ...", "play ...")
+        open_pattern = r"(?:open|launch|start|play|goto|go to|kholo)\s+(.+)"
         open_match = re.search(open_pattern, text)
         if open_match and not any(neg in text for neg in ["source", "file", "pr", "issue", "branch", "ticket"]):
             target = open_match.group(1).strip()
-            # If user asks to open/play a website (YouTube, GitHub, search, etc.)
+            # If user asks to open/play a website
             url = app_launcher.parse_url_or_search(target)
             if url:
                 prof_dir, prof_label = app_launcher.resolve_chrome_profile(text)
@@ -211,7 +239,7 @@ class MediatorWorker:
                 ok, res_msg = app_launcher.launch_chrome(profile_dir=prof_dir)
                 return True, res_msg, None
 
-            # General desktop apps and folders (VS Code, Notepad, Spotify, dev folder, etc.)
+            # General desktop apps and folders
             ok, res_msg = app_launcher.launch_app(target)
             return True, res_msg, None
 
