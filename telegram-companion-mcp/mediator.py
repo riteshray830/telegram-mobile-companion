@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
 
 import system_controls
+import app_launcher
 
 def format_natural_battery() -> str:
     """Translates battery data into friendly, natural conversation."""
@@ -191,6 +192,28 @@ class MediatorWorker:
         proc_keywords = ["what apps are running", "heavy apps", "biggest apps", "processes", "what is running", "running apps"]
         if any(k in text for k in proc_keywords):
             return True, format_natural_processes(), None
+
+        # 8. Open Apps, Websites, YouTube, or Folders (with Chrome Profile bypass)
+        open_pattern = r"(?:open|launch|start|play|goto|go to)\s+(.+)"
+        open_match = re.search(open_pattern, text)
+        if open_match and not any(neg in text for neg in ["source", "file", "pr", "issue", "branch", "ticket"]):
+            target = open_match.group(1).strip()
+            # If user asks to open/play a website (YouTube, GitHub, search, etc.)
+            url = app_launcher.parse_url_or_search(target)
+            if url:
+                prof_dir, prof_label = app_launcher.resolve_chrome_profile(text)
+                ok, res_msg = app_launcher.launch_chrome(url=url, profile_dir=prof_dir)
+                return True, res_msg, None
+
+            # If user explicitly asked for Chrome / Browser
+            if any(b in target for b in ["chrome", "browser", "internet"]):
+                prof_dir, prof_label = app_launcher.resolve_chrome_profile(text)
+                ok, res_msg = app_launcher.launch_chrome(profile_dir=prof_dir)
+                return True, res_msg, None
+
+            # General desktop apps and folders (VS Code, Notepad, Spotify, dev folder, etc.)
+            ok, res_msg = app_launcher.launch_app(target)
+            return True, res_msg, None
 
         # If not a system control task, return False so it routes to Antigravity
         return False, None, None

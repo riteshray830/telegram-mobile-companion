@@ -453,5 +453,36 @@ def laptop_screenshot() -> str:
         return res
     return msg
 
+import app_launcher
+
+@mcp.tool()
+def laptop_open_browser(url: str = "", profile_name: str = "Default") -> str:
+    """
+    Opens Google Chrome directly on the laptop bypassing the 'Who is using Chrome?' profile picker.
+    Can open to a specific URL and profile (e.g. 'Default', 'Profile 8' for snigdha).
+    """
+    prof_dir, prof_label = app_launcher.resolve_chrome_profile(profile_name)
+    ok, msg = app_launcher.launch_chrome(url=url if url else None, profile_dir=prof_dir)
+    return msg
+
+@mcp.tool()
+def laptop_launch_app(app_target: str) -> str:
+    """
+    Launches an application, tool, or folder on the laptop (e.g. 'VS Code', 'Notepad', 'dev folder', 'Calculator').
+    """
+    ok, msg = app_launcher.launch_app(app_target)
+    return msg
+
+@mcp.tool()
+def laptop_chrome_profiles() -> str:
+    """
+    Lists all detected Google Chrome profiles on the laptop with their names, emails, and directory IDs.
+    """
+    profiles = app_launcher.get_chrome_profiles()
+    lines = ["🖥️ *Available Chrome Profiles on Laptop:*"]
+    for k, v in profiles.items():
+        lines.append(f"• *{k}*: {v['name']} (`{v['email']}`)")
+    return "\n".join(lines)
+
 if __name__ == "__main__":
     mcp.run()
