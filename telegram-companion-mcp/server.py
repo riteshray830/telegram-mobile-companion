@@ -484,5 +484,64 @@ def laptop_chrome_profiles() -> str:
         lines.append(f"• *{k}*: {v['name']} (`{v['email']}`)")
     return "\n".join(lines)
 
+import webcam_snap
+import clipboard_bridge
+import git_center
+import dev_watchdog
+
+@mcp.tool()
+def laptop_webcam_snap() -> str:
+    """
+    Captures a real-time photo from the laptop's front webcam and sends it to the user's phone via Telegram.
+    """
+    ok, path, msg = webcam_snap.take_webcam_photo()
+    if ok and path:
+        res = telegram_send_photo(str(path), caption="📷 Laptop Front Webcam Capture")
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return res
+    return msg
+
+@mcp.tool()
+def laptop_clipboard_get() -> str:
+    """
+    Reads the current text on the laptop's clipboard.
+    """
+    ok, msg = clipboard_bridge.get_clipboard_content()
+    return msg
+
+@mcp.tool()
+def laptop_clipboard_set(text: str) -> str:
+    """
+    Sets the laptop's clipboard to the provided text.
+    """
+    ok, msg = clipboard_bridge.set_clipboard_content(text)
+    return msg
+
+@mcp.tool()
+def laptop_git_status(repo_hint: str = "") -> str:
+    """
+    Gets the git branch, working tree dirty status, and latest commit for a repository in D:\\dev.
+    """
+    msg, buttons = git_center.get_git_status_report(repo_hint if repo_hint else None)
+    return msg
+
+@mcp.tool()
+def laptop_watch_dev_server(target: str = "", action: str = "watch") -> str:
+    """
+    Watches or unwatches a local development server endpoint (e.g. '3000', 'localhost:8080') for crash alerts.
+    action can be 'watch', 'unwatch', or 'status'.
+    """
+    if action == "status" or not target:
+        return dev_watchdog.get_watch_status()
+    elif action == "unwatch":
+        ok, msg = dev_watchdog.remove_watch_target(target)
+        return msg
+    else:
+        ok, msg = dev_watchdog.add_watch_target(target)
+        return msg
+
 if __name__ == "__main__":
     mcp.run()

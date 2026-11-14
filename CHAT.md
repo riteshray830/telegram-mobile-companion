@@ -2,7 +2,7 @@
 
 > **Project:** Telegram Mobile Companion (`Friday`)
 > **Repository:** [https://github.com/riteshray830/telegram-mobile-companion](https://github.com/riteshray830/telegram-mobile-companion)
-> **Generated:** 2026-11-14 14:59:22
+> **Generated:** 2026-11-14 15:16:39
 > **Notice:** This file automatically records all conversation turns and commands across both Antigravity and Telegram.
 
 ---
@@ -1089,6 +1089,58 @@ In [`D:\dev\projects\Antigravity remove chat tool\`](file:///D:/dev/projects/Ant
 - **Windows Startup:** 🟢 **Active & Installed** (`FridayRemoteCompanion.lnk` verified in `shell:startup`).
 - **Background Daemon:** 🟢 Running and actively listening.
 - **Git Repository:** Committed (`48d50f6`) and pushed to [GitHub](https://github.com/riteshray830/telegram-mobile-companion).
+
+---
+
+### 🕒 2026-11-14 14:58:07 `[Antigravity]`
+
+#### 👤 **User:**
+save this details in . chat.md file and in future the whole conversation should be recorded in that chat,md file. 
+also update future scope .md file too
+
+#### 🤖 **Friday / Assistant:**
+### 1. Conversation Recorded in [`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md) & Continuous Future Auto-Logging
+
+The entire conversation history from the very beginning of the project has been extracted, formatted, and saved to:
+- [`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md) (and synchronized to [`.chat.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/.chat.md))
+
+#### How Automatic Future Recording Works:
+1. **Antigravity Turns:** Integrated into [`forward_reply_hook.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/forward_reply_hook.py) via [`chat_logger.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/chat_logger.py). On every turn completion, new user requests and model replies are automatically appended with timestamps.
+2. **Mobile Telegram Turns:** Integrated into [`friday_runner.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/friday_runner.py). Any messages, controls, or questions sent from your phone are also logged into [`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md).
+
+---
+
+### 2. [`FUTURE_SCOPE.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/FUTURE_SCOPE.md) Updated
+
+The roadmap has been updated:
+
+- **Delivered Capabilities Marked Completed:**
+  - [x] Two-Way Telegram Bridge & Interactive Approval Buttons
+  - [x] Antigravity CLI Lifecycle Hook & Multi-Backend AI
+  - [x] Sub-Millisecond Human Mediator (< 10 ms execution)
+  - [x] Laptop Telemetry & Battery Health Watchdog (< 15% alert)
+  - [x] Hardware Controls (Volume, Media Play/Pause/Skip, Screen Brightness, Workstation Lock)
+  - [x] Screen Capture (`/screenshot`)
+  - [x] Process Manager & Emergency Kill-Switch (`/ps`, `/kill`)
+  - [x] Chrome Multi-Profile Bypassing (`app_launcher.py`)
+  - [x] Windows Auto-Start on Boot (Silent VBS Daemon in `shell:startup`)
+  - [x] 1-Click Batch Controls & Remote Shutdown Triggers (`/stop`)
+  - [x] Automated Conversation Logging ([`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md))
+
+- **New Upcoming Roadmap Added:**
+  - 🎙️ **Voice Notes to Tasks:** Transcribing Telegram voice messages via Whisper / Gemini
+  - 📁 **Remote File Transfer:** Phone $\leftrightarrow$ Laptop file downloading and uploading
+  - 📷 **Desk / Room Security Webcam Snap:** Remote camera capture via `/webcam`
+  - 📋 **Shared Clipboard Bridge:** Instant clipboard synchronization between phone and PC
+  - 🔔 **Dev Server Crash Watchdog:** Proactive localhost pings and crash alerts
+  - 🌿 **Remote Git Command Center:** One-tap git reviews and diffs
+  - 🪟 **Windows System Tray Companion:** Minimalist desktop tray status widget
+
+---
+
+### Current Status
+- **Background Daemon:** Active with chat logging enabled.
+- **Git Repository:** Committed (`014ea0e`) and pushed to [GitHub](https://github.com/riteshray830/telegram-mobile-companion).
 
 ---
 

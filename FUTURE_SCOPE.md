@@ -10,14 +10,16 @@ This document outlines delivered capabilities, active features, and the forward 
 flowchart LR
     A["Phase 1: Foundation & Bridge<br/>(COMPLETED)"] --> B["Phase 2: Laptop Controls & Mediator<br/>(COMPLETED)"]
     B --> C["Phase 3: Silent Daemon & Auto-Start<br/>(COMPLETED)"]
-    C --> D["Phase 4: Mobile Multimodal & Sync<br/>(UPCOMING)"]
-    D --> E["Phase 5: Dev Watchdogs & Git Center<br/>(UPCOMING)"]
+    C --> D["Phase 4: Mobile Multimodal & Sync<br/>(COMPLETED)"]
+    D --> E["Phase 5: Dev Watchdogs & Git Center<br/>(COMPLETED)"]
+    E --> F["Phase 6: Autonomous Proactivity<br/>(UPCOMING)"]
 
     A -.- A1["• Two-Way Telegram Bridge<br/>• Antigravity CLI Lifecycle Hook<br/>• Multi-Backend AI (Gemini/OpenAI/Ollama)<br/>• Interactive Approval Prompts"]
     B -.- B1["• Conversational Mediator (<10ms)<br/>• Battery, CPU, RAM, Disk Telemetry<br/>• Proactive Battery Alert (<15%)<br/>• Chrome Profile Picker Bypassing<br/>• Volume, Media, Brightness & Lock<br/>• Remote Stop Triggers"]
     C -.- C1["• Silent VBS Background Runner<br/>• Windows Startup (shell:startup)<br/>• 1-Click Batch Controls<br/>• Single-Instance Process Protection<br/>• Automated CHAT.md Logging"]
-    D -.- D1["• Voice Notes (Audio to Tasks)<br/>• File Transfer (Laptop to Phone)<br/>• Desk Webcam Snap (/webcam)<br/>• Shared Clipboard Bridge"]
-    E -.- E1["• Dev Server Crash Watchdog<br/>• One-Tap Git Review Center<br/>• Morning Standup Briefing<br/>• System Tray Dashboard"]
+    D -.- D1["• Voice Notes (Whisper/Gemini Audio)<br/>• Bidirectional File Transfer<br/>• Desk Webcam Snap (/webcam)<br/>• Shared Clipboard Bridge"]
+    E -.- E1["• Dev Server Crash Watchdog<br/>• One-Tap Git Command Center<br/>• Desktop System Tray Widget<br/>• Auto-Recovery Alerts"]
+    F -.- F1["• Daily Morning Standup Briefing<br/>• Sketch/Photo to Code Vision<br/>• Windows Sleep & Power Actions"]
 ```
 
 ---
@@ -51,45 +53,56 @@ flowchart LR
 - [x] **1-Click Laptop Batch Controls**: [`enable_autostart.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/enable_autostart.bat), [`disable_autostart.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/disable_autostart.bat), [`status_autostart.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/status_autostart.bat), [`start_friday.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/start_friday.bat), [`stop_friday.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/stop_friday.bat).
 - [x] **Automated Activity & Conversation Logging** ([`chat_logger.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/chat_logger.py)): Full conversation synchronized automatically to [`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md) and [`.chat.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/.chat.md).
 
+### 4. 🎙️ Mobile-Native Superpowers (Voice, Vision & Files)
+- [x] **Voice Notes to Tasks (Audio $\rightarrow$ Action)** ([`voice_handler.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/voice_handler.py)):
+  - Send voice notes (`.oga`/`.ogg`) directly in Telegram.
+  - Automatically transcribed via Gemini 2.5 Flash native multimodal audio or OpenAI Whisper API.
+  - Dispatches transcribed audio commands immediately as live laptop actions.
+- [x] **Desk / Room Security Webcam Snap (`/webcam`)** ([`webcam_snap.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/webcam_snap.py)):
+  - Remote camera snap via DirectShow backend (`cv2.CAP_DSHOW`) delivering immediate desk/room photo to Telegram.
+- [x] **Remote File Transfer (Phone $\leftrightarrow$ Laptop)** ([`file_transfer.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/file_transfer.py)):
+  - **Download from Laptop:** `download <file>`, `send me <file>`, `/file <path>` quickly searches `D:\dev`, Desktop, and Downloads with directory pruning and sends file via Telegram `sendDocument`.
+  - **Upload to Laptop:** Sending any document or file to Telegram automatically saves it into `Downloads\TelegramUploads` with automatic deduplication.
+- [x] **Shared Clipboard Bridge** ([`clipboard_bridge.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/clipboard_bridge.py)):
+  - `copy: <text>` or `/copy <text>`: Instantly writes text to laptop clipboard ready for `Ctrl+V`.
+  - `/clip` or `clipboard`: Reads current text on laptop clipboard and displays it on mobile.
+
+### 5. 🔔 Proactive Watchdogs, Git Center & Tray Widget
+- [x] **Dev Server Crash Watchdog** ([`dev_watchdog.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/dev_watchdog.py)):
+  - `/watch <port or url>`: Proactively pings local server every 15 seconds.
+  - Alerts phone on crash (connection refused / 500 error) after 2 failed pings.
+  - Sends recovery celebration message when server comes back online.
+  - `/watchers`: Lists all monitored local endpoints.
+  - `/unwatch <port>`: Stops watching endpoint.
+- [x] **Remote Git Command Center** ([`git_center.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/git_center.py)):
+  - `/git` or `git status`: Reports branch name, dirty working tree files, and latest commit.
+  - Inline Telegram buttons: `[✅ Commit & Push]`, `[📦 Stash]`, `[🔍 View Diff]`, `[📥 Pull Latest]`.
+- [x] **Windows System Tray Companion** ([`system_tray.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/system_tray.py)):
+  - Minimalist glowing 'F' taskbar tray widget (`pystray`).
+  - Menu options: View chat log (`CHAT.md`), Open `D:\dev`, Toggle boot auto-start, Restart Friday daemon, and Stop Friday daemon.
+  - 1-Click Launchers: [`start_tray.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/start_tray.bat) and [`friday_tray_runner.vbs`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/friday_tray_runner.vbs).
+
 ---
 
 ## 🔮 Upcoming Capabilities (Future Roadmap)
 
-### 1. 🎙️ Mobile-Native Superpowers (Voice & Vision)
-- [ ] **Voice Notes to Tasks (Audio $\rightarrow$ Action)**
-  - Hold the microphone button on Telegram while on the go.
-  - Automatically transcribe `.oga` voice notes via Whisper or Gemini Multimodal audio.
-  - Executes intent or generates code directly without typing.
-- [ ] **Remote File Explorer & Downloader (Phone $\leftrightarrow$ Laptop)**
-  - Request any file: *"send me resume.pdf from Desktop"* $\rightarrow$ Friday delivers the document to Telegram.
-  - Send any file or photo from phone $\rightarrow$ Friday automatically saves it to laptop's `Downloads` or project folder.
-- [ ] **Desk / Room Security Webcam Snap (`/webcam`)**
-  - Command `/webcam` triggers laptop's front webcam, captures a photo, and sends it to Telegram to check on desk or room.
-- [ ] **Camera / Sketch to Code (Multimodal Vision)**
-  - Snap a photo of a whiteboard diagram or sketch $\rightarrow$ Friday parses visual elements and drafts code.
+### 1. 👁️ Advanced Multimodal Vision
+- [ ] **Camera / Sketch to Code**
+  - Snap a photo of a whiteboard diagram or UI mockup $\rightarrow$ Friday parses layout elements and drafts corresponding code.
+- [ ] **Dual-Screen & Multi-Monitor Switching**
+  - Ability to choose which monitor to screenshot or switch active window displays.
 
-### 2. 📋 Productivity & System Integrations
-- [ ] **Shared Clipboard Bridge (Phone $\leftrightarrow$ Laptop)**
-  - Send `"copy: <text>"` from phone $\rightarrow$ instantly copied to Windows clipboard ready to `Ctrl+V`.
-  - Ask *"what is copied on my laptop?"* $\rightarrow$ returns laptop clipboard text to Telegram.
-- [ ] **Windows Power Controls**:
-  - Sleep mode: `"put laptop to sleep"` via `SetSuspendState`.
-  - Empty Recycle Bin: `"empty recycle bin"` to free disk space.
-  - Safe Restart / Shutdown with confirmation prompt.
+### 2. ⚡ Extended Windows Power Actions
+- [ ] **Windows Sleep & Hibernation**
+  - `"put laptop to sleep"` via `SetSuspendState`.
+- [ ] **Empty Recycle Bin**
+  - `"empty recycle bin"` to free disk space remotely.
+- [ ] **Safe Restart / Shutdown with Confirmation**
+  - Prompts with interactive Telegram confirmation before rebooting Windows.
 
-### 3. 🔔 Proactive Watchdogs & Git Automation
-- [ ] **Localhost & Dev Server Watchdog**
-  - Monitor local development ports (e.g. `http://localhost:3000`, `8080`).
-  - Send instant push alert to Telegram if a dev server crashes or stops responding.
-- [ ] **Remote Git Command Center & Interactive Diff Review**
-  - Check status of projects across `D:\dev` remotely.
-  - Receive git diffs with interactive inline buttons: `[✅ Commit & Push]`, `[📦 Stash]`, `[📥 Pull Latest]`.
-- [ ] **Daily Morning Standup Briefing (9:00 AM)**
-  - Automated morning summary of uncommitted changes, yesterday's commits, and pending tasks.
-
-### 4. 🪟 Windows System Tray Companion
-- [ ] **Minimalist System Tray Dashboard**
-  - Small icon in Windows system tray showing connection status, quick toggle, and log viewer.
+### 3. 🌅 Autonomous Morning Standup Briefing
+- [ ] **Daily Morning Standup (9:00 AM)**
+  - Automated morning push summary of uncommitted changes, yesterday's commits, and pending tasks.
 
 ---
 
