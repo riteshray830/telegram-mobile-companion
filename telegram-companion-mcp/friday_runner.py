@@ -11,9 +11,10 @@ from typing import Dict, Any, Optional
 import httpx
 from dotenv import load_dotenv
 
-# Import multi-backend engine and system controls
+# Import multi-backend engine, system controls, and human mediator
 from ai_backends import get_backend_instance, find_active_conversation_id
 import system_controls
+from mediator import mediator
 
 # Ensure stdout uses UTF-8 on Windows
 if sys.platform == "win32":
@@ -98,49 +99,22 @@ async def send_typing(client: httpx.AsyncClient):
         pass
 
 async def handle_user_message(client: httpx.AsyncClient, text: str):
-    lower = text.lower().strip()
+    await send_typing(client)
 
-    # 1. System Controls & Telemetry Shortcuts
-    if lower in ["/battery", "battery", "battery health", "battery level", "charge"]:
-        await send_msg(client, system_controls.get_battery_report())
-        return
-
-    if lower in ["/stats", "/health", "/info", "system health", "cpu", "ram", "memory"]:
-        await send_msg(client, system_controls.get_system_health())
-        return
-
-    if lower in ["/wifi", "/network", "wifi", "wifi status", "network"]:
-        await send_msg(client, system_controls.get_wifi_status())
-        return
-
-    if lower in ["/ps", "/top", "/processes", "processes", "process list"]:
-        await send_msg(client, system_controls.get_top_processes())
-        return
-
-    if lower.startswith("/kill "):
-        target = text[6:].strip()
-        await send_msg(client, system_controls.kill_process(target))
-        return
-
-    if lower in ["/lock", "lock laptop", "lock pc", "lock"]:
-        await send_msg(client, system_controls.lock_workstation())
-        return
-
-    if lower in ["/screenshot", "screenshot", "screen capture", "capture screen"]:
-        await send_msg(client, "📸 Capturing laptop screen...")
-        path, msg = system_controls.take_screenshot()
-        if path:
-            await send_photo_file(client, path, caption="🖥️ Current Laptop Display")
+    # 1. Let the Human Mediator worker interpret the message first
+    handled, reply, photo_path = mediator.process_request(text)
+    if handled:
+        if photo_path:
+            await send_photo_file(client, photo_path, caption=reply or "🖥️ Current Laptop Screen")
             try:
-                path.unlink(missing_ok=True)
+                photo_path.unlink(missing_ok=True)
             except Exception:
                 pass
-        else:
-            await send_msg(client, msg)
+        elif reply:
+            await send_msg(client, reply)
         return
 
-    # 2. General AI / Antigravity Execution
-    await send_typing(client)
+    # 2. General AI / Antigravity Execution (for coding, files, projects, or creative tasks)
     context = {
         "dev_root": str(DEV_ROOT),
         "current_dir": str(current_dir),
