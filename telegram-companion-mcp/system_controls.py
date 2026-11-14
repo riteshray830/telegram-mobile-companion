@@ -199,6 +199,96 @@ def lock_workstation() -> str:
     except Exception as e:
         return f"❌ Error locking workstation: {e}"
 
+def control_volume(action: str) -> str:
+    """Controls master volume: 'mute', 'up', 'down'."""
+    if sys.platform != "win32":
+        return "Volume control is only supported on Windows."
+    try:
+        user32 = ctypes.windll.user32
+        VK_VOLUME_MUTE = 0xAD
+        VK_VOLUME_DOWN = 0xAE
+        VK_VOLUME_UP = 0xAF
+
+        act = action.lower().strip()
+        if any(k in act for k in ["mute", "unmute"]):
+            user32.keybd_event(VK_VOLUME_MUTE, 0, 0, 0)
+            user32.keybd_event(VK_VOLUME_MUTE, 0, 2, 0)
+            return "🔊 Toggled mute on your laptop!"
+        elif any(k in act for k in ["up", "louder", "high", "more", "increase", "badhao"]):
+            for _ in range(5):
+                user32.keybd_event(VK_VOLUME_UP, 0, 0, 0)
+                user32.keybd_event(VK_VOLUME_UP, 0, 2, 0)
+            return "🔊 Turned volume UP on your laptop (+10%)."
+        elif any(k in act for k in ["down", "quieter", "lower", "less", "decrease", "kam"]):
+            for _ in range(5):
+                user32.keybd_event(VK_VOLUME_DOWN, 0, 0, 0)
+                user32.keybd_event(VK_VOLUME_DOWN, 0, 2, 0)
+            return "🔉 Turned volume DOWN on your laptop (-10%)."
+        return "Usage: volume up, volume down, or mute."
+    except Exception as e:
+        return f"❌ Failed to adjust volume: {e}"
+
+def control_media(action: str) -> str:
+    """Controls media playback: 'play', 'pause', 'play_pause', 'next', 'prev'."""
+    if sys.platform != "win32":
+        return "Media control is only supported on Windows."
+    try:
+        user32 = ctypes.windll.user32
+        VK_MEDIA_NEXT_TRACK = 0xB0
+        VK_MEDIA_PREV_TRACK = 0xB1
+        VK_MEDIA_STOP = 0xB2
+        VK_MEDIA_PLAY_PAUSE = 0xB3
+
+        act = action.lower().strip()
+        if any(k in act for k in ["next", "skip", "forward", "agla"]):
+            user32.keybd_event(VK_MEDIA_NEXT_TRACK, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_NEXT_TRACK, 0, 2, 0)
+            return "⏭️ Skipped to next track!"
+        elif any(k in act for k in ["prev", "previous", "back", "pichla"]):
+            user32.keybd_event(VK_MEDIA_PREV_TRACK, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_PREV_TRACK, 0, 2, 0)
+            return "⏮️ Went back to previous track!"
+        elif "stop" in act:
+            user32.keybd_event(VK_MEDIA_STOP, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_STOP, 0, 2, 0)
+            return "⏹️ Stopped media playback."
+        else:
+            user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 2, 0)
+            return "⏯️ Toggled Play/Pause on your laptop!"
+    except Exception as e:
+        return f"❌ Failed to control media: {e}"
+
+def get_brightness() -> str:
+    """Queries current screen brightness."""
+    if sys.platform != "win32":
+        return "Brightness query is only supported on Windows."
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness"],
+            capture_output=True, text=True, timeout=3
+        )
+        val = res.stdout.strip()
+        if val.isdigit():
+            return f"🔆 Your screen brightness is currently at **{val}%**."
+        return "Could not retrieve screen brightness."
+    except Exception as e:
+        return f"❌ Brightness query error: {e}"
+
+def set_brightness(level: int) -> str:
+    """Sets screen brightness (0-100)."""
+    if sys.platform != "win32":
+        return "Brightness control is only supported on Windows."
+    lvl = max(0, min(100, int(level)))
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, {lvl})"],
+            capture_output=True, text=True, timeout=3
+        )
+        return f"🔆 Adjusted screen brightness to **{lvl}%**!"
+    except Exception as e:
+        return f"❌ Failed to set brightness: {e}"
+
 def kill_process(target: str) -> str:
     """Kills a process by PID or Name safely."""
     target_clean = target.strip()

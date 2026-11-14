@@ -315,6 +315,30 @@ def launch_app(app_target: str) -> Tuple[bool, str]:
         subprocess.Popen(["powershell.exe"], creationflags=creation_flags, close_fds=True)
         return True, "⚡ Opened PowerShell terminal on your laptop."
 
+    if "cmd" in lower or "command prompt" in lower:
+        subprocess.Popen(["cmd.exe"], creationflags=creation_flags, close_fds=True)
+        return True, "⚡ Opened Command Prompt on your laptop."
+
+    if "task manager" in lower or "taskmgr" in lower:
+        subprocess.Popen(["taskmgr.exe"], creationflags=creation_flags, close_fds=True)
+        return True, "📊 Opened Windows Task Manager on your laptop."
+
+    if "paint" in lower:
+        subprocess.Popen(["mspaint.exe"], creationflags=creation_flags, close_fds=True)
+        return True, "🎨 Opened MS Paint on your laptop."
+
+    if "settings" in lower:
+        os.startfile("ms-settings:")
+        return True, "⚙️ Opened Windows Settings on your laptop."
+
+    if "camera" in lower:
+        os.startfile("microsoft.windows.camera:")
+        return True, "📷 Opened Windows Camera on your laptop."
+
+    if "control panel" in lower:
+        subprocess.Popen(["control.exe"], creationflags=creation_flags, close_fds=True)
+        return True, "🎛️ Opened Control Panel on your laptop."
+
     if "explorer" in lower or "files" in lower:
         subprocess.Popen(["explorer.exe"], creationflags=creation_flags, close_fds=True)
         return True, "📁 Opened File Explorer on your laptop."
