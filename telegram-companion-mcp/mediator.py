@@ -251,13 +251,22 @@ class MediatorWorker:
         # ------------------------------------------------------------------
         # 5b. Desk / Room Security Webcam Snap Intent
         # ------------------------------------------------------------------
-        if any(wt in words for wt in ["webcam", "/webcam", "/camera", "/cam"]) or any(
-            p in text for p in [
-                "desk photo", "desk snap", "room photo", "room snap", "take webcam photo",
-                "take camera photo", "take photo", "take a photo", "take a picture",
-                "take picture", "security snap", "front camera", "webcam photo", "webcam snap"
-            ]
-        ):
+        is_screen_request = any(sc in text for sc in ["screen", "display", "ss", "desktop"])
+        is_webcam_trigger = (
+            any(wt in words for wt in ["webcam", "/webcam", "/camera", "/cam", "camera"])
+            or any(
+                p in text for p in [
+                    "desk photo", "desk snap", "room photo", "room snap", "security snap", "front camera",
+                    "take another one", "take another", "one more photo", "another photo", "another one",
+                    "take one more", "ek aur photo", "ek aur lo", "click photo", "click a photo", "click picture"
+                ]
+            )
+            or (
+                not is_screen_request and any(w in words for w in ["photo", "picture", "pic", "snap"])
+                and any(w in words for w in ["take", "click", "capture", "grab", "laptop", "another", "more", "my"])
+            )
+        )
+        if is_webcam_trigger:
             import webcam_snap
             ok, cam_path, cam_msg = webcam_snap.take_webcam_photo()
             if ok and cam_path:

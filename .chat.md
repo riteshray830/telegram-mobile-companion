@@ -2,7 +2,7 @@
 
 > **Project:** Telegram Mobile Companion (`Friday`)
 > **Repository:** [https://github.com/riteshray830/telegram-mobile-companion](https://github.com/riteshray830/telegram-mobile-companion)
-> **Generated:** 2026-11-14 15:16:39
+> **Generated:** 2026-11-14 15:21:39
 > **Notice:** This file automatically records all conversation turns and commands across both Antigravity and Telegram.
 
 ---
@@ -1141,6 +1141,62 @@ The roadmap has been updated:
 ### Current Status
 - **Background Daemon:** Active with chat logging enabled.
 - **Git Repository:** Committed (`014ea0e`) and pushed to [GitHub](https://github.com/riteshray830/telegram-mobile-companion).
+
+---
+
+### 🕒 2026-11-14 15:02:24 `[Antigravity]`
+
+#### 👤 **User:**
+New Upcoming Roadmap Added:
+
+🎙️ Voice Notes to Tasks: Transcribing Telegram voice messages via Whisper / Gemini
+📁 Remote File Transfer: Phone 
+↔
+↔ Laptop file downloading and uploading
+📷 Desk / Room Security Webcam Snap: Remote camera capture via /webcam
+📋 Shared Clipboard Bridge: Instant clipboard synchronization between phone and PC
+🔔 Dev Server Crash Watchdog: Proactive localhost pings and crash alerts
+🌿 Remote Git Command Center: One-tap git reviews and diffs
+🪟 Windows System Tray Companion: Minimalist desktop tray status widget
+
+
+start developing
+
+#### 🤖 **Friday / Assistant:**
+# 🎉 All 7 Roadmap Capabilities Developed & Live!
+
+All 7 upcoming features from the roadmap have been developed, tested, wired into the conversational mediator and background daemon, and pushed to the repository.
+
+---
+
+### 🚀 What's New & How to Use Each Feature
+
+| # | Feature | Triggers / Usage | What Happens |
+|---|---|---|---|
+| **1** | 🎙️ **Voice Notes to Tasks** | Send a voice note in Telegram (`.oga`/`.ogg`) | Automatically transcribed via Gemini Multimodal Audio / Whisper API, transcribed text is echoed back, and immediately dispatched as an executable laptop command. |
+| **2** | 📷 **Webcam Security Snap** | `/webcam`, `/camera`, or *"take webcam photo"*, *"desk photo"* | Captures a live snapshot from your laptop's front camera via OpenCV DirectShow backend and delivers it straight to Telegram. |
+| **3** | 📋 **Shared Clipboard Bridge** | • **Set:** `copy: <text>` or `/copy <text>`<br/>• **Get:** `/clip` or *"what's on my clipboard?"* | Instantly syncs text between your phone and laptop clipboard. Set text is ready for `Ctrl+V` on your PC immediately. |
+| **4** | 📁 **Remote File Transfer** | • **Download:** `download <file>`, `send me <file>`, or `/file <name>`<br/>• **Upload:** Send any document in Telegram | • Searches `D:\dev`, Desktop, and Downloads with depth limits and directory pruning, then uploads files up to 50MB via Telegram `sendDocument`.<br/>• Uploaded files are saved to `Downloads\TelegramUploads` with deduplication. |
+| **5** | 🔔 **Dev Server Crash Watchdog** | • `/watch <port or url>` (e.g. `/watch 3000`)<br/>• `/watchers` (list active monitors)<br/>• `/unwatch <port>` | Pings endpoints every 15 seconds. If a dev server crashes (refused connection or 500 error), you get an instant push alert. When back up, you receive an automatic recovery notice. |
+| **6** | 🌿 **Remote Git Command Center** | `/git`, `git status`, or `repo status` | Shows branch name, dirty working tree preview, and latest commit, with interactive inline keyboard buttons: `[✅ Comm
+<truncated 1320 bytes>
+0tool/telegram-companion-mcp/dev_watchdog.py): Async background polling watchdog with alert callbacks.
+   - [`git_center.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/git_center.py): Git repository inspector with button actions.
+   - [`system_tray.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/system_tray.py): Desktop system tray icon.
+2. **Daemon & Mediator Integrations**:
+   - [`mediator.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/mediator.py): Added intent handlers for all 7 features; returns `MediatorResult` with document paths, photos, and interactive buttons.
+   - [`friday_runner.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/friday_runner.py): Handles voice messages, document uploads, inline keyboard callback queries, and watchdog loops.
+   - [`server.py`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/telegram-companion-mcp/server.py): Exposed 5 new MCP tools (`laptop_webcam_snap`, `laptop_clipboard_get`, `laptop_clipboard_set`, `laptop_git_status`, `laptop_watch_dev_server`).
+3. **Launchers & Documentation**:
+   - [`start_tray.bat`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/start_tray.bat) & [`friday_tray_runner.vbs`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/friday_tray_runner.vbs): 1-click launchers for the system tray widget.
+   - [`FUTURE_SCOPE.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/FUTURE_SCOPE.md): Updated roadmap diagram and marked all 7 features delivered.
+   - [`CHAT.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/CHAT.md) & [`.chat.md`](file:///D:/dev/projects/Antigravity%20remove%20chat%20tool/.chat.md): Full conversation and turn-by-turn history synchronized.
+
+---
+
+### 🌐 Status & Git Sync
+- **Live Daemon**: Upgraded Friday runner is actively running in the background.
+- **GitHub Commit**: All changes committed and pushed to `main` (`47cf62a`).
 
 ---
 
