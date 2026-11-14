@@ -98,10 +98,51 @@ async def send_typing(client: httpx.AsyncClient):
     except Exception:
         pass
 
+# Stop Triggers for remote shutdown
+STOP_TRIGGERS = {
+    "/stop", "/exit", "/shutdown", "/quit", "/killbot",
+    "stop friday", "close friday", "exit friday", "shutdown friday", "turn off friday",
+    "stop tool", "close tool", "exit tool", "shutdown tool", "stop bot", "close bot",
+    "friday band karo", "bot band karo", "tool band karo", "band karo friday"
+}
+
+def is_stop_trigger(text: str) -> bool:
+    t = text.lower().strip()
+    if t in STOP_TRIGGERS:
+        return True
+    return any(t.startswith(prefix) for prefix in ["/stop", "/exit", "/shutdown"])
+
+async def shutdown_friday(client: httpx.AsyncClient):
+    """Gracefully notifies user and shuts down Friday."""
+    print("🛑 Received shutdown command. Stopping Friday Remote Companion...")
+    farewell = (
+        "🛑 *Friday Remote Companion is shutting down.* 👋\n\n"
+        "• Background monitoring: **Stopped**\n"
+        "• Telegram connection: **Disconnected**\n\n"
+        "To start Friday again, double-click `start_friday.bat` on your laptop!"
+    )
+    try:
+        await send_msg(client, farewell)
+        await asyncio.sleep(0.8)
+    except Exception as e:
+        print("Error sending farewell:", e)
+    finally:
+        print("Friday has shut down.")
+        os._exit(0)
+
 async def handle_user_message(client: httpx.AsyncClient, text: str):
+    # Check stop trigger first
+    if is_stop_trigger(text):
+        await shutdown_friday(client)
+        return
+
     # 1. Let the Human Mediator worker interpret the message first (<1ms execution on laptop)
     handled, reply, photo_path = mediator.process_request(text)
     if handled:
+        if reply == "__FRIDAY_SHUTDOWN__":
+            await shutdown_friday(client)
+            return
+
         if photo_path:
             await send_photo_file(client, photo_path, caption=reply or "🖥️ Current Laptop Screen")
             try:
@@ -220,7 +261,8 @@ async def main():
                                         f"• `/ps` - Top running processes\n"
                                         f"• `/kill <PID>` - Terminate process\n"
                                         f"• `/screenshot` - Snap laptop screen\n"
-                                        f"• `/lock` - Lock Windows PC\n\n"
+                                        f"• `/lock` - Lock Windows PC\n"
+                                        f"• `/stop` - Remotely shut down Friday\n\n"
                                         f"💬 *Chat with Antigravity:*\n"
                                         f"Type any question or instruction in human language!"
                                     ))

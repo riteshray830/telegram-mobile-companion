@@ -134,6 +134,19 @@ class MediatorWorker:
         words = set(re.findall(r'\b[a-z0-9_\-\./]+\b', text))
 
         # ------------------------------------------------------------------
+        # 0. Remote Stop / Shutdown Trigger
+        # ------------------------------------------------------------------
+        if text.startswith(("/stop", "/exit", "/shutdown", "/killbot")) or any(
+            p in text for p in [
+                "stop friday", "close friday", "exit friday", "shutdown friday", "turn off friday",
+                "stop tool", "close tool", "stop bot", "close bot", "friday band karo", "bot band karo"
+            ]
+        ) or (
+            any(w in words for w in ["stop", "close", "shutdown", "exit", "band"]) and any(w in words for w in ["friday", "bot", "tool", "companion"])
+        ):
+            return True, "__FRIDAY_SHUTDOWN__", None
+
+        # ------------------------------------------------------------------
         # 1. Volume & Audio Control Intent
         # ------------------------------------------------------------------
         if any(w in words for w in ["mute", "unmute", "/mute", "silence"]) or "awaz band" in text or "sound off" in text:
