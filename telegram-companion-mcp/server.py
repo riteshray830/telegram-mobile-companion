@@ -387,5 +387,71 @@ def telegram_update_progress(message_id: int, text: str) -> str:
     except Exception as e:
         return f"Error updating progress: {str(e)}"
 
+# ==========================================
+# Laptop Controls & System Telemetry Tools
+# ==========================================
+
+import system_controls
+
+@mcp.tool()
+def laptop_battery_status() -> str:
+    """
+    Checks the laptop's battery health, current charge percentage, charging state,
+    design capacity vs full charge capacity, and cycle count.
+    """
+    return system_controls.get_battery_report()
+
+@mcp.tool()
+def laptop_system_health() -> str:
+    """
+    Retrieves full laptop system health: CPU utilization percentage, logical cores,
+    RAM usage/total, storage across all drives (free and used GB), OS, and system uptime.
+    """
+    return system_controls.get_system_health()
+
+@mcp.tool()
+def laptop_wifi_status() -> str:
+    """
+    Queries current Wi-Fi adapter state, active SSID network name, and connection signal strength.
+    """
+    return system_controls.get_wifi_status()
+
+@mcp.tool()
+def laptop_top_processes(limit: int = 8) -> str:
+    """
+    Lists the top resource-consuming processes running on the laptop by Memory (RAM).
+    """
+    return system_controls.get_top_processes(limit)
+
+@mcp.tool()
+def laptop_kill_process(target: str) -> str:
+    """
+    Terminates a process safely by PID (number) or process name (e.g. 'node.exe').
+    Protected system processes are guarded against termination.
+    """
+    return system_controls.kill_process(target)
+
+@mcp.tool()
+def laptop_lock() -> str:
+    """
+    Locks the Windows laptop workstation immediately for security.
+    """
+    return system_controls.lock_workstation()
+
+@mcp.tool()
+def laptop_screenshot() -> str:
+    """
+    Captures the primary laptop screen and sends it as an image directly to the user's phone via Telegram.
+    """
+    path, msg = system_controls.take_screenshot()
+    if path:
+        res = telegram_send_photo(str(path), caption="🖥️ Laptop Display Capture")
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return res
+    return msg
+
 if __name__ == "__main__":
     mcp.run()
