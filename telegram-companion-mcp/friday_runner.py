@@ -46,6 +46,24 @@ if not TOKEN or not ALLOWED_CHAT_ID:
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 backend = get_backend_instance(AI_BACKEND)
 
+def ensure_single_instance():
+    """Ensures only one Friday runner process runs at any time, terminating stale duplicates."""
+    import psutil
+    current_pid = os.getpid()
+    for p in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            pname = (p.info['name'] or '').lower()
+            if not pname.startswith("python"):
+                continue
+            cmd = " ".join(p.info['cmdline'] or []).lower()
+            if "friday_runner.py" in cmd and p.info['pid'] != current_pid:
+                print(f"⚠️ Existing Friday process detected (PID: {p.info['pid']}). Reclaiming session...")
+                p.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+ensure_single_instance()
+
 # State: start at DEV_ROOT or projects/exploring if exists
 if (DEV_ROOT / "projects" / "exploring").exists():
     current_dir = DEV_ROOT / "projects" / "exploring"
@@ -262,6 +280,7 @@ async def main():
                                         f"• `/kill <PID>` - Terminate process\n"
                                         f"• `/screenshot` - Snap laptop screen\n"
                                         f"• `/lock` - Lock Windows PC\n"
+                                        f"• `/autostart` - Check / toggle auto-start on boot\n"
                                         f"• `/stop` - Remotely shut down Friday\n\n"
                                         f"💬 *Chat with Antigravity:*\n"
                                         f"Type any question or instruction in human language!"

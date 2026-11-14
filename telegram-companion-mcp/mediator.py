@@ -147,6 +147,20 @@ class MediatorWorker:
             return True, "__FRIDAY_SHUTDOWN__", None
 
         # ------------------------------------------------------------------
+        # 0b. Windows Auto-Start on Boot Intent
+        # ------------------------------------------------------------------
+        if "autostart" in text or "auto start" in text or "auto-start" in text or text.startswith("/autostart"):
+            import autostart_manager
+            if any(k in text for k in ["on", "enable", "activate", "chalu", "install"]):
+                ok, msg = autostart_manager.enable_autostart()
+                return True, msg, None
+            elif any(k in text for k in ["off", "disable", "deactivate", "band", "remove", "uninstall"]):
+                ok, msg = autostart_manager.disable_autostart()
+                return True, msg, None
+            else:
+                return True, autostart_manager.get_autostart_status(), None
+
+        # ------------------------------------------------------------------
         # 1. Volume & Audio Control Intent
         # ------------------------------------------------------------------
         if any(w in words for w in ["mute", "unmute", "/mute", "silence"]) or "awaz band" in text or "sound off" in text:
