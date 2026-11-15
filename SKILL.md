@@ -1,11 +1,16 @@
 ---
 name: telegram-companion
-description: Two-way Telegram mobile companion and remote dev controller. Use when the user asks to send notifications or files to Telegram, request interactive permissions from mobile, capture webcam or screenshot, query laptop battery/stats, or manage remote dev watchdogs.
+description: Two-way Telegram mobile companion and remote dev controller. Use when the user asks to send notifications or files to Telegram, request interactive permissions from mobile, capture webcam or screenshot, query laptop battery/stats, manage remote dev watchdogs, or connect this chat session to their Telegram.
 ---
 
 # Telegram Mobile Companion & Remote Dev Controller
 
-This skill allows Antigravity to interact directly with the user's mobile phone via Telegram and query/control hardware on their laptop.
+This skill allows Antigravity to interact directly with the user's mobile phone via Telegram, query/control laptop hardware, and route conversations directly to Telegram.
+
+## Self-Setup & Automatic Chat Binding
+Whenever this skill is imported into a new chat or project, Antigravity should call:
+- `telegram_setup_and_bind(project_path, project_title)`
+This automatically configures the MCP server in unbuffered mode (`-u`, `PYTHONUNBUFFERED=1`), registers the `Stop` lifecycle hook for full mobile replies, and binds incoming Telegram messages directly to this active chat!
 
 ## Available Capabilities & MCP Tools
 
@@ -17,13 +22,13 @@ This skill allows Antigravity to interact directly with the user's mobile phone 
 - `telegram_send_file(file_path, caption)`: Delivers any document or source file directly to the user's phone.
 
 ### 2. Remote Laptop Diagnostics & Hardware Controls
+- `laptop_screenshot()`: Takes a screenshot of the primary display and sends it to Telegram.
+- `laptop_webcam_snap()`: Captures a photo from the laptop's front webcam and delivers it to Telegram.
 - `laptop_battery_status()`: Checks current battery percentage, charging state, cycle count, and health.
 - `laptop_system_health()`: Reads real-time CPU utilization, RAM usage, and available disk space.
 - `laptop_wifi_status()`: Reports connected Wi-Fi SSID and signal strength.
 - `laptop_top_processes()`: Lists the highest memory-consuming processes.
 - `laptop_kill_process(target)`: Safely terminates a hung or runaway process by PID or name.
-- `laptop_screenshot()`: Takes a screenshot of the primary display and sends it to Telegram.
-- `laptop_webcam_snap()`: Captures a photo from the laptop's front webcam and delivers it to Telegram.
 - `laptop_lock()`: Locks the Windows workstation for security.
 
 ### 3. Productivity & Dev Watchdogs
@@ -33,6 +38,12 @@ This skill allows Antigravity to interact directly with the user's mobile phone 
 - `laptop_watch_dev_server(target, action)`: Adds or removes local ports (e.g. 3000, 8080) to the crash watchdog.
 - `laptop_open_browser(url, profile_name)`: Launches Google Chrome directly into a specific profile, bypassing the profile picker.
 - `laptop_launch_app(app_target)`: Opens desktop apps (VS Code, Explorer, Terminal, Calculator, etc.).
+
+## Mobile Chat Routing & Commands
+When chatting with Friday from mobile Telegram:
+- `/chats` or `/projects`: Lists all active Antigravity chats across projects.
+- `/switch <number>`: Switches incoming Telegram commands to that specific Antigravity project.
+- `/current`: Shows which project/chat is currently bound to Telegram.
 
 ## Best Practices
 - When executing critical, irreversible actions (e.g., dropping a database, deleting production files, or running heavy deployment scripts), call `telegram_ask_permission` to get mobile approval first.

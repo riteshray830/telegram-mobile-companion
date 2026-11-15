@@ -448,7 +448,10 @@ async def main():
                                         f"• 🔔 `/watch <port>` - Dev server crash monitor\n"
                                         f"• 🌿 `/git` - Git command center with one-tap buttons\n"
                                         f"• 🪟 *System Tray:* Minimalist desktop tray widget\n\n"
-                                        f"💬 *Chat with Antigravity:*\n"
+                                        f"💬 *Chat & Project Switcher:*\n"
+                                        f"• `/chats` or `/projects` - List active Antigravity projects\n"
+                                        f"• `/switch <num>` - Switch to another open project\n"
+                                        f"• `/current` - View currently bound project\n\n"
                                         f"Type or speak any instruction in natural language!"
                                     )
                                     asyncio.create_task(send_msg(client, help_msg))

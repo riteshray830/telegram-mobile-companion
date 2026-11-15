@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import time
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
@@ -45,67 +46,123 @@ def main():
         print(json.dumps({}))
         return
 
-    # Automatically log conversation turns to CHAT.md and .chat.md
+    t_path = Path(transcript_path_str)
+    # Extract conversation ID from path: brain/<conv_id>/.system_generated/logs/transcript.jsonl
+    try:
+        conv_id = t_path.parent.parent.parent.name
+    except Exception:
+        conv_id = "default"
+
+    # Automatically bind this conversation as the active Telegram session
+    project_label = "Project"
+    try:
+        import session_manager
+        meta = session_manager.bind_session(conv_id)
+        ws = meta.get("workspace", "")
+        if ws and ws != "Unknown":
+            project_label = Path(ws).name
+        else:
+            project_label = meta.get("title", "Project")
+    except Exception as e:
+        log_err(f"Error updating active session: {e}")
+
+    # Automatically log conversation turns to CHAT.md
     try:
         import chat_logger
         chat_logger.sync_from_transcript(transcript_path_str)
     except Exception as e:
         log_err(f"Error updating CHAT.md: {e}")
 
-    state_file = script_dir / ".last_forwarded_step"
-    last_sent_step = -1
-    if state_file.exists():
+    # Conversation-scoped step tracking
+    steps_file = script_dir / ".last_forwarded_steps.json"
+    steps_map = {}
+    if steps_file.exists():
         try:
-            last_sent_step = int(state_file.read_text(encoding="utf-8").strip())
+            steps_map = json.loads(steps_file.read_text(encoding="utf-8"))
         except Exception:
-            last_sent_step = -1
+            steps_map = {}
+
+    last_sent_step = steps_map.get(conv_id, -1)
+
+    # Prefer transcript_full.jsonl to ensure content is NEVER truncated
+    full_transcript_path = t_path.parent / "transcript_full.jsonl"
+    source_file = full_transcript_path if full_transcript_path.exists() else t_path
 
     try:
-        with open(transcript_path_str, "r", encoding="utf-8", errors="replace") as f:
+        with open(source_file, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         target_step_idx = -1
         last_content = None
 
+        # Look for the last model response (prefer PLANNER_RESPONSE)
         for line in reversed(lines):
             try:
                 data = json.loads(line)
-                if data.get("source") == "MODEL" and data.get("content"):
+                is_model = (data.get("source") == "MODEL")
+                msg_type = data.get("type")
+                content = data.get("content", "").strip()
+
+                if is_model and msg_type == "PLANNER_RESPONSE" and content:
                     step_idx = data.get("step_index", -1)
                     if step_idx > last_sent_step:
                         target_step_idx = step_idx
-                        last_content = data["content"].strip()
+                        last_content = content
                         break
                     else:
-                        # Already sent or older step
                         break
             except Exception:
                 continue
 
+        # Fallback if no PLANNER_RESPONSE with content found
+        if not last_content:
+            for line in reversed(lines):
+                try:
+                    data = json.loads(line)
+                    if data.get("source") == "MODEL" and data.get("content"):
+                        step_idx = data.get("step_index", -1)
+                        if step_idx > last_sent_step:
+                            target_step_idx = step_idx
+                            last_content = data["content"].strip()
+                            break
+                        else:
+                            break
+                except Exception:
+                    continue
+
         if last_content and target_step_idx > last_sent_step:
-            header = "🤖 *Antigravity:*\n\n"
+            header = f"🤖 *Antigravity [{project_label}]:*\n\n"
             full_msg = header + last_content
 
+            # Chunk into safe 3800-character segments
             chunks = [full_msg[i:i+3800] for i in range(0, len(full_msg), 3800)]
             api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-            with httpx.Client(timeout=15.0) as client:
-                for chunk in chunks:
-                    resp = client.post(api_url, json={
+            with httpx.Client(timeout=20.0) as client:
+                for idx, chunk in enumerate(chunks):
+                    payload = {
                         "chat_id": chat_id,
                         "text": chunk,
                         "parse_mode": "Markdown"
-                    })
-                    res_data = resp.json()
-                    if not res_data.get("ok"):
-                        # Fallback without markdown
-                        client.post(api_url, json={
-                            "chat_id": chat_id,
-                            "text": chunk
-                        })
+                    }
+                    try:
+                        resp = client.post(api_url, json=payload)
+                        res_data = resp.json()
+                        # If Telegram rejects markdown formatting across chunks, fallback to raw clean text
+                        if not res_data.get("ok"):
+                            payload.pop("parse_mode", None)
+                            client.post(api_url, json=payload)
+                    except Exception as net_err:
+                        log_err(f"Network error delivering chunk {idx}: {net_err}")
 
-            # Update state
-            state_file.write_text(str(target_step_idx), encoding="utf-8")
+                    # Slight pause between chunks to respect Telegram rate limits and preserve sequence
+                    if idx < len(chunks) - 1:
+                        time.sleep(0.35)
+
+            # Update conversation-scoped step map
+            steps_map[conv_id] = target_step_idx
+            steps_file.write_text(json.dumps(steps_map, indent=2), encoding="utf-8")
+
     except Exception as e:
         log_err(f"Error forwarding reply: {e}")
 

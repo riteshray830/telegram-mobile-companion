@@ -12,6 +12,14 @@ import time
 import json
 import logging
 from typing import List, Optional
+
+# Force line-buffering / unbuffered streams on Windows to prevent MCP JSON-RPC deadlocks
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+    except Exception:
+        pass
 import httpx
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
@@ -542,6 +550,83 @@ def laptop_watch_dev_server(target: str = "", action: str = "watch") -> str:
     else:
         ok, msg = dev_watchdog.add_watch_target(target)
         return msg
+
+import session_manager
+
+@mcp.tool()
+def telegram_setup_and_bind(project_path: str = "", project_title: str = "") -> str:
+    """
+    Self-healing configuration tool: automatically sets up the Telegram Companion MCP server,
+    unbuffered execution, Stop lifecycle hook, and binds the current Antigravity chat as the active target.
+    Run this whenever importing or using Telegram companion in a new chat or project.
+    """
+    try:
+        gemini_config_dir = Path.home() / ".gemini" / "config"
+        gemini_config_dir.mkdir(parents=True, exist_ok=True)
+        mcp_cfg_file = gemini_config_dir / "mcp_config.json"
+        
+        mcp_data = {"mcpServers": {}}
+        if mcp_cfg_file.exists():
+            try:
+                mcp_data = json.loads(mcp_cfg_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        script_path = Path(__file__).resolve()
+        py_exe = sys.executable
+
+        mcp_data["mcpServers"]["telegram-companion"] = {
+            "command": py_exe,
+            "args": ["-u", str(script_path)],
+            "env": {
+                "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", BOT_TOKEN).strip(),
+                "TELEGRAM_CHAT_ID": _get_chat_id(),
+                "PYTHONUNBUFFERED": "1"
+            }
+        }
+        mcp_cfg_file.write_text(json.dumps(mcp_data, indent=2), encoding="utf-8")
+
+        hooks_file = gemini_config_dir / "hooks.json"
+        hooks_data = {}
+        if hooks_file.exists():
+            try:
+                hooks_data = json.loads(hooks_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        hook_script = script_path.parent / "forward_reply_hook.py"
+        hooks_data["telegram-forwarder"] = {
+            "Stop": [
+                {
+                    "type": "command",
+                    "command": f'python "{hook_script.as_posix()}"',
+                    "timeout": 15
+                }
+            ]
+        }
+        hooks_file.write_text(json.dumps(hooks_data, indent=2), encoding="utf-8")
+
+        meta = session_manager.get_active_session()
+        cid = meta.get("conv_id")
+        if cid:
+            meta = session_manager.bind_session(
+                cid,
+                title=project_title or meta.get("title", "Active Project"),
+                workspace=project_path or meta.get("workspace", "Active Project")
+            )
+
+        ws_name = Path(meta.get("workspace", "Antigravity")).name if meta.get("workspace") != "Unknown" else meta.get("title")
+        return (
+            f"✅ Telegram Companion Self-Setup Complete!\n\n"
+            f"• Bound Project: {ws_name}\n"
+            f"• Workspace Folder: {meta.get('workspace')}\n"
+            f"• Active Session ID: {meta.get('conv_id')}\n"
+            f"• Unbuffered Mode: Enabled (-u, PYTHONUNBUFFERED=1)\n"
+            f"• Lifecycle Hook: Registered (forward_reply_hook.py on Stop)\n\n"
+            f"Incoming Telegram messages will now be delivered directly to this chat, and all responses will be pushed to your phone!"
+        )
+    except Exception as e:
+        return f"❌ Error during self-setup: {e}"
 
 if __name__ == "__main__":
     mcp.run()

@@ -79,8 +79,22 @@ def sync_from_transcript(transcript_path: str):
     if not transcript_path or not os.path.exists(transcript_path):
         return
 
-    last_step = -1
-    if LAST_STEP_FILE.exists():
+    t_p = Path(transcript_path)
+    try:
+        conv_id = t_p.parent.parent.parent.name
+    except Exception:
+        conv_id = "default"
+
+    steps_map_file = SCRIPT_DIR / ".last_logged_steps.json"
+    steps_map = {}
+    if steps_map_file.exists():
+        try:
+            steps_map = json.loads(steps_map_file.read_text(encoding="utf-8"))
+        except Exception:
+            steps_map = {}
+
+    last_step = steps_map.get(conv_id, -1)
+    if last_step == -1 and LAST_STEP_FILE.exists():
         try:
             last_step = int(LAST_STEP_FILE.read_text(encoding="utf-8").strip())
         except Exception:
@@ -93,8 +107,11 @@ def sync_from_transcript(transcript_path: str):
     current_user_time = None
     max_step_found = last_step
 
+    full_t_path = t_p.parent / "transcript_full.jsonl"
+    source_p = full_t_path if full_t_path.exists() else t_p
+
     try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(source_p, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     d = json.loads(line)
@@ -136,6 +153,8 @@ def sync_from_transcript(transcript_path: str):
             )
 
         if max_step_found > last_step:
+            steps_map[conv_id] = max_step_found
+            steps_map_file.write_text(json.dumps(steps_map, indent=2), encoding="utf-8")
             LAST_STEP_FILE.write_text(str(max_step_found), encoding="utf-8")
 
     except Exception as e:

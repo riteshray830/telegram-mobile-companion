@@ -6,17 +6,16 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import httpx
 
+import session_manager
+
 # Ensure stdout uses UTF-8
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 def find_active_conversation_id() -> Optional[str]:
-    """Dynamically finds the active Antigravity conversation ID across platforms."""
-    conv_dir = Path.home() / ".gemini" / "antigravity" / "conversations"
-    if not conv_dir.exists():
-        return None
-    dbs = sorted([f for f in conv_dir.glob("*.db")], key=lambda f: f.stat().st_mtime, reverse=True)
-    return dbs[0].stem if dbs else None
+    """Dynamically finds the active Antigravity conversation ID using session_manager."""
+    meta = session_manager.get_active_session()
+    return meta.get("conv_id")
 
 class BaseAIBackend:
     async def generate_reply(self, user_message: str, context: Dict[str, Any]) -> str:
@@ -38,12 +37,41 @@ class AntigravityBackend(BaseAIBackend):
                 break
 
     async def generate_reply(self, user_message: str, context: Dict[str, Any]) -> str:
-        conv_id = find_active_conversation_id()
+        clean_msg = user_message.strip()
+
+        # Handle session switching commands directly from Telegram
+        if clean_msg.lower() in ["/chats", "/projects", "/sessions", "chats", "projects"]:
+            return session_manager.format_sessions_list()
+
+        if clean_msg.lower().startswith(("/switch", "switch ")):
+            parts = clean_msg.split(maxsplit=1)
+            hint = parts[1].strip() if len(parts) > 1 else ""
+            if not hint:
+                return "💡 Please specify a project number or name: `/switch <number>` (Send `/chats` to list)"
+            ok, switch_msg = session_manager.switch_session_by_hint(hint)
+            return switch_msg
+
+        if clean_msg.lower() in ["/current", "/active", "current project", "active project", "current chat"]:
+            meta = session_manager.get_active_session()
+            ws_name = Path(meta.get("workspace", "Antigravity")).name if meta.get("workspace") != "Unknown" else meta.get("title", "Antigravity")
+            return (
+                f"🎯 *Currently Connected Project:*\n\n"
+                f"• **Project:** `{ws_name}`\n"
+                f"• **Folder:** `{meta.get('workspace')}`\n"
+                f"• **Topic:** _{meta.get('title')}_\n"
+                f"• **Session ID:** `{meta.get('conv_id')}`\n"
+                f"• **Last Active:** {meta.get('last_active_str')}\n\n"
+                f"_To switch project, send:_ `/chats`"
+            )
+
+        meta = session_manager.get_active_session()
+        conv_id = meta.get("conv_id")
         if not conv_id:
-            return "❌ No active Antigravity session found on this laptop."
+            return "❌ No active Antigravity session found on this laptop. Please open Antigravity or type `/chats`."
         if not self.agy_exe or not self.agy_exe.exists():
             return "❌ Antigravity CLI (`agy`) not found. Please verify Antigravity installation."
 
+        ws_name = Path(meta.get("workspace", "Antigravity")).name if meta.get("workspace") != "Unknown" else meta.get("title", "Antigravity")
         content = f"[User via Mobile Telegram]: {user_message}"
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -60,7 +88,7 @@ class AntigravityBackend(BaseAIBackend):
                 err_msg = stderr.decode("utf-8", errors="replace").strip()
                 return f"⚠️ Error sending to agent: {err_msg[:200]}"
             # Antigravity's lifecycle hook (forward_reply_hook.py) will deliver the full response
-            return "⚡ *Delivered to Antigravity.* Working on it..."
+            return f"⚡ *Delivered to [{ws_name}].* Working on it..."
         except Exception as e:
             return f"❌ Execution error: {e}"
 
